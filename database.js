@@ -50,7 +50,9 @@ function saveDatabase() {
 function classifyEmail(fromAddress) {
     const address = fromAddress.toLowerCase();
 
-    if (address.includes('usuarios.inmuebles24.com')) {
+    if (address.includes('arkelly147@gmail.com')) {
+        return 'personal';
+    } else if (address.includes('usuarios.inmuebles24.com')) {
         return 'inmuebles24';
     } else if (address.includes('solicitudes@proppit.com') || address.includes('@proppit.com')) {
         return 'proppit';
@@ -136,7 +138,7 @@ function getAllEmails(limit = 100, source = null) {
 
 // Obtener estadísticas
 function getStats() {
-    if (!db) return { total: 0, inmuebles24: 0, proppit: 0, easybroker: 0, vivanuncios: 0, mercadolibre: 0, otros: 0 };
+    if (!db) return { total: 0, personal: 0, inmuebles24: 0, proppit: 0, easybroker: 0, vivanuncios: 0, mercadolibre: 0, otros: 0 };
 
     const result = db.exec(`
         SELECT 
@@ -148,6 +150,7 @@ function getStats() {
 
     const stats = {
         total: 0,
+        personal: 0,
         inmuebles24: 0,
         proppit: 0,
         easybroker: 0,

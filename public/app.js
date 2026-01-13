@@ -38,6 +38,7 @@ async function fetchEmails(source = null) {
 // ============================================
 function updateStatsUI() {
     document.getElementById('stat-total').textContent = stats.total || 0;
+    document.getElementById('stat-personal').textContent = stats.personal || 0;
     document.getElementById('stat-inmuebles24').textContent = stats.inmuebles24 || 0;
     document.getElementById('stat-proppit').textContent = stats.proppit || 0;
     document.getElementById('stat-easybroker').textContent = stats.easybroker || 0;
@@ -76,6 +77,7 @@ function updateEmailsUI() {
 // ============================================
 function formatSource(source) {
     const names = {
+        'personal': 'Personal',
         'inmuebles24': 'Inmuebles24',
         'proppit': 'Proppit',
         'easybroker': 'EasyBroker',

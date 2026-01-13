@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
     <div class="app">
         <!-- Header -->
@@ -33,6 +35,13 @@
                         <div class="stat-info">
                             <span class="stat-value" id="stat-total">0</span>
                             <span class="stat-label">Total Correos</span>
+                        </div>
+                    </div>
+                    <div class="stat-card personal" data-source="personal">
+                        <div class="stat-icon">👤</div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-personal">0</span>
+                            <span class="stat-label">Personal</span>
                         </div>
                     </div>
                     <div class="stat-card inmuebles24" data-source="inmuebles24">
@@ -79,6 +88,7 @@
                     <h2>Correos Recientes</h2>
                     <div class="filter-buttons">
                         <button class="filter-btn active" data-filter="all">Todos</button>
+                        <button class="filter-btn" data-filter="personal">Personal</button>
                         <button class="filter-btn" data-filter="inmuebles24">Inmuebles24</button>
                         <button class="filter-btn" data-filter="proppit">Proppit</button>
                         <button class="filter-btn" data-filter="easybroker">EasyBroker</button>
@@ -86,7 +96,7 @@
                         <button class="filter-btn" data-filter="mercadolibre">MercadoLibre</button>
                     </div>
                 </div>
-                
+
                 <div class="emails-list" id="emails-list">
                     <div class="empty-state">
                         <span class="empty-icon">📭</span>
@@ -124,4 +134,5 @@
 
     <script src="app.js"></script>
 </body>
+
 </html>
