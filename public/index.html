@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Monitor - Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">📧</span>
+                    <h1>Email Monitor</h1>
+                </div>
+                <div class="header-actions">
+                    <span class="status-indicator online"></span>
+                    <span class="status-text">Conectado a n8n</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Stats Cards -->
+            <section class="stats-section">
+                <div class="stats-grid">
+                    <div class="stat-card total">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-total">0</span>
+                            <span class="stat-label">Total Correos</span>
+                        </div>
+                    </div>
+                    <div class="stat-card inmuebles24" data-source="inmuebles24">
+                        <div class="stat-icon">🏠</div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-inmuebles24">0</span>
+                            <span class="stat-label">Inmuebles24</span>
+                        </div>
+                    </div>
+                    <div class="stat-card proppit" data-source="proppit">
+                        <div class="stat-icon">🏢</div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-proppit">0</span>
+                            <span class="stat-label">Proppit</span>
+                        </div>
+                    </div>
+                    <div class="stat-card easybroker" data-source="easybroker">
+                        <div class="stat-icon">🔑</div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-easybroker">0</span>
+                            <span class="stat-label">EasyBroker</span>
+                        </div>
+                    </div>
+                    <div class="stat-card vivanuncios" data-source="vivanuncios">
+                        <div class="stat-icon">📢</div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-vivanuncios">0</span>
+                            <span class="stat-label">Vivanuncios</span>
+                        </div>
+                    </div>
+                    <div class="stat-card mercadolibre" data-source="mercadolibre">
+                        <div class="stat-icon">🛒</div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-mercadolibre">0</span>
+                            <span class="stat-label">MercadoLibre</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Emails Section -->
+            <section class="emails-section">
+                <div class="section-header">
+                    <h2>Correos Recientes</h2>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-filter="all">Todos</button>
+                        <button class="filter-btn" data-filter="inmuebles24">Inmuebles24</button>
+                        <button class="filter-btn" data-filter="proppit">Proppit</button>
+                        <button class="filter-btn" data-filter="easybroker">EasyBroker</button>
+                        <button class="filter-btn" data-filter="vivanuncios">Vivanuncios</button>
+                        <button class="filter-btn" data-filter="mercadolibre">MercadoLibre</button>
+                    </div>
+                </div>
+                
+                <div class="emails-list" id="emails-list">
+                    <div class="empty-state">
+                        <span class="empty-icon">📭</span>
+                        <p>No hay correos todavía</p>
+                        <span class="empty-hint">Los correos aparecerán aquí cuando n8n los envíe</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Email Detail Modal -->
+        <div class="modal" id="email-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modal-subject">Asunto del correo</h3>
+                    <button class="close-btn" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-meta">
+                        <span class="modal-from" id="modal-from">De: ejemplo@correo.com</span>
+                        <span class="modal-date" id="modal-date">Fecha</span>
+                        <span class="modal-source" id="modal-source">Origen</span>
+                    </div>
+                    <div class="modal-preview" id="modal-preview">
+                        Contenido del correo...
+                    </div>
+                    <details class="raw-data">
+                        <summary>Ver datos completos (JSON)</summary>
+                        <pre id="modal-raw"></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

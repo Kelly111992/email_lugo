@@ -1,0 +1,23 @@
+{
+  "name": "email-monitor-app",
+  "version": "1.0.0",
+  "description": "Dashboard para monitorear correos desde n8n clasificados por origen",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "n8n",
+    "email",
+    "dashboard",
+    "outlook"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "sql.js": "^1.10.2"
+  }
+}
