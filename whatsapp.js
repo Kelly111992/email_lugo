@@ -136,6 +136,46 @@ async function sendWhatsAppMessage(message, destinationNumber) {
 }
 
 // ============================================
+// EXTRAER NOMBRE DEL CLIENTE
+// ============================================
+function extractClientName(emailData) {
+    const bodyPreview = emailData.bodyPreview || emailData.body?.content || '';
+    const subject = emailData.subject || '';
+
+    // Patrón 1: "From: NOMBRE mediante Inmuebles24" o "From: NOMBRE mediante Proppit"
+    const inmuebles24Match = bodyPreview.match(/From:\s*([^<\n]+)\s*mediante\s*(?:Inmuebles24|Proppit)/i);
+    if (inmuebles24Match) {
+        return inmuebles24Match[1].trim();
+    }
+
+    // Patrón 2: "Enviado por:" seguido de nombre en la siguiente línea
+    const enviadoPorMatch = bodyPreview.match(/Enviado por:\s*\n?\s*([^\n<@]+)/i);
+    if (enviadoPorMatch) {
+        return enviadoPorMatch[1].trim();
+    }
+
+    // Patrón 3: "Nombre:" o "Cliente:" seguido del nombre
+    const nombreMatch = bodyPreview.match(/(?:Nombre|Cliente|Name):\s*([^\n<@]+)/i);
+    if (nombreMatch) {
+        return nombreMatch[1].trim();
+    }
+
+    // Patrón 4: "De:" seguido del nombre (común en algunos portales)
+    const deMatch = bodyPreview.match(/De:\s*([^<\n@]+?)(?:\s*<|$|\n)/i);
+    if (deMatch && deMatch[1].trim().length > 2) {
+        return deMatch[1].trim();
+    }
+
+    // Fallback: usar el nombre del campo from del email
+    const fromName = emailData.from?.emailAddress?.name || emailData.from?.name || null;
+    if (fromName && fromName !== 'Sin nombre') {
+        return fromName;
+    }
+
+    return 'No detectado';
+}
+
+// ============================================
 // FORMATEAR NOTIFICACIÓN DE EMAIL
 // ============================================
 function formatEmailNotification(emailData, source, propertyUrl = null, propertyCode = null, linkInmobiliarioUrl = null) {
@@ -144,9 +184,8 @@ function formatEmailNotification(emailData, source, propertyUrl = null, property
         emailData.from ||
         'Desconocido';
 
-    const fromName = emailData.from?.emailAddress?.name ||
-        emailData.from?.name ||
-        'Sin nombre';
+    // Extraer nombre del cliente del cuerpo del correo
+    const clientName = extractClientName(emailData);
 
     const subject = emailData.subject || '(Sin asunto)';
     const bodyPreview = emailData.bodyPreview || emailData.body?.content || '';
@@ -200,7 +239,7 @@ function formatEmailNotification(emailData, source, propertyUrl = null, property
     let message = `📧 *NUEVO LEAD*
 
 ${emoji} *Origen:* ${sourceName}
-👤 *Cliente:* ${fromName}
+👤 *Cliente:* ${clientName}
 📧 *Email:* ${fromAddress}
 📱 *Teléfono:* ${phone}`;
 
