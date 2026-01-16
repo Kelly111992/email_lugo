@@ -2,7 +2,13 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-const dbPath = path.join(__dirname, 'emails.db');
+const dbPath = path.join(__dirname, 'data', 'emails.db');
+
+// Cerciorarse de que exista la carpeta data
+if (!fs.existsSync(path.join(__dirname, 'data'))) {
+    console.log('📂 Creando carpeta de datos persistentes...');
+    fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
+}
 
 // Crear la base de datos
 const db = new sqlite3.Database(dbPath, (err) => {

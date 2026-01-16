@@ -11,6 +11,9 @@ RUN npm install --production
 # Copy source files
 COPY . .
 
+# Create data directory for persistence
+RUN mkdir -p /app/data
+
 # Expose port
 EXPOSE 4000
 
