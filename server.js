@@ -97,6 +97,18 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Obtener tendencias para el gráfico
+app.get('/api/trends', async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+        const trends = await database.getTrends(days);
+        res.json(trends);
+    } catch (error) {
+        console.error('❌ Error al obtener tendencias:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Servir el frontend
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));

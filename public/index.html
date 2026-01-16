@@ -7,6 +7,7 @@
     <title>Email Monitor - Dashboard</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -78,6 +79,25 @@
                             <span class="stat-value" id="stat-mercadolibre">0</span>
                             <span class="stat-label">MercadoLibre</span>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Chart Section -->
+            <section class="chart-section">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h2>📈 Tendencia de Leads por Sitio</h2>
+                        <div class="chart-controls">
+                            <select id="chart-period" class="chart-select">
+                                <option value="7">Últimos 7 días</option>
+                                <option value="14">Últimos 14 días</option>
+                                <option value="30" selected>Últimos 30 días</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="trendsChart"></canvas>
                     </div>
                 </div>
             </section>

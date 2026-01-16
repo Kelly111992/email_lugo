@@ -136,10 +136,68 @@ async function getEmailById(id) {
     });
 }
 
+// Obtener tendencias por día para el gráfico
+async function getTrends(days = 30) {
+    return new Promise((resolve, reject) => {
+        const sql = `
+            SELECT 
+                DATE(received_at) as date,
+                source,
+                COUNT(*) as count
+            FROM emails 
+            WHERE received_at >= DATE('now', '-${days} days')
+            GROUP BY DATE(received_at), source
+            ORDER BY DATE(received_at) ASC
+        `;
+
+        db.all(sql, [], (err, rows) => {
+            if (err) {
+                reject(err);
+            } else {
+                // Organizar los datos por fecha y fuente
+                const sources = ['inmuebles24', 'proppit', 'easybroker', 'vivanuncios', 'mercadolibre', 'personal', 'otros'];
+                const dateMap = {};
+
+                // Generar todas las fechas en el rango
+                for (let i = days - 1; i >= 0; i--) {
+                    const date = new Date();
+                    date.setDate(date.getDate() - i);
+                    const dateStr = date.toISOString().split('T')[0];
+                    dateMap[dateStr] = {};
+                    sources.forEach(source => {
+                        dateMap[dateStr][source] = 0;
+                    });
+                }
+
+                // Llenar con datos reales
+                rows.forEach(row => {
+                    if (dateMap[row.date]) {
+                        dateMap[row.date][row.source] = row.count;
+                    }
+                });
+
+                // Convertir a formato para Chart.js
+                const labels = Object.keys(dateMap).map(date => {
+                    const d = new Date(date + 'T00:00:00');
+                    return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+                });
+
+                const datasets = sources.map(source => ({
+                    source,
+                    data: Object.values(dateMap).map(day => day[source] || 0)
+                }));
+
+                resolve({ labels, datasets });
+            }
+        });
+    });
+}
+
 module.exports = {
     initDatabase: () => Promise.resolve(), // SQLite ya se inicializa en el constructor
     insertEmail,
     getAllEmails,
     getStats,
-    getEmailById
+    getEmailById,
+    getTrends
 };

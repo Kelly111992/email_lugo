@@ -210,8 +210,166 @@ function startAutoRefresh() {
     setInterval(() => {
         fetchStats();
         fetchEmails(currentFilter);
+        updateTrendsChart();
     }, 30000);
 }
+
+// ============================================
+// TRENDS CHART
+// ============================================
+let trendsChart = null;
+
+const chartColors = {
+    inmuebles24: { border: '#f97316', bg: 'rgba(249, 115, 22, 0.1)' },
+    proppit: { border: '#a855f7', bg: 'rgba(168, 85, 247, 0.1)' },
+    easybroker: { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },
+    vivanuncios: { border: '#22c55e', bg: 'rgba(34, 197, 94, 0.1)' },
+    mercadolibre: { border: '#eab308', bg: 'rgba(234, 179, 8, 0.1)' },
+    personal: { border: '#06b6d4', bg: 'rgba(6, 182, 212, 0.1)' },
+    otros: { border: '#6b7280', bg: 'rgba(107, 114, 128, 0.1)' }
+};
+
+const sourceLabels = {
+    inmuebles24: 'Inmuebles24',
+    proppit: 'Proppit',
+    easybroker: 'EasyBroker',
+    vivanuncios: 'Vivanuncios',
+    mercadolibre: 'MercadoLibre',
+    personal: 'Personal',
+    otros: 'Otros'
+};
+
+async function fetchTrends(days = 30) {
+    try {
+        const response = await fetch(`/api/trends?days=${days}`);
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching trends:', error);
+        return null;
+    }
+}
+
+async function initTrendsChart() {
+    const ctx = document.getElementById('trendsChart');
+    if (!ctx) return;
+
+    const data = await fetchTrends(30);
+    if (!data) return;
+
+    const datasets = data.datasets.map(ds => ({
+        label: sourceLabels[ds.source] || ds.source,
+        data: ds.data,
+        borderColor: chartColors[ds.source]?.border || '#6b7280',
+        backgroundColor: chartColors[ds.source]?.bg || 'rgba(107, 114, 128, 0.1)',
+        borderWidth: 2,
+        tension: 0.4,
+        fill: true,
+        pointRadius: 3,
+        pointHoverRadius: 6
+    }));
+
+    trendsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.labels,
+            datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        color: '#a0a0b0',
+                        usePointStyle: true,
+                        padding: 20,
+                        font: {
+                            family: 'Inter, sans-serif',
+                            size: 12
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(30, 30, 50, 0.95)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#a0a0b0',
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
+                    titleFont: {
+                        family: 'Inter, sans-serif',
+                        weight: '600'
+                    },
+                    bodyFont: {
+                        family: 'Inter, sans-serif'
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.05)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#6b6b7b',
+                        font: {
+                            family: 'Inter, sans-serif',
+                            size: 11
+                        }
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.05)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#6b6b7b',
+                        stepSize: 1,
+                        font: {
+                            family: 'Inter, sans-serif',
+                            size: 11
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+async function updateTrendsChart() {
+    if (!trendsChart) return;
+
+    const periodSelect = document.getElementById('chart-period');
+    const days = periodSelect ? parseInt(periodSelect.value) : 30;
+
+    const data = await fetchTrends(days);
+    if (!data) return;
+
+    trendsChart.data.labels = data.labels;
+    data.datasets.forEach((ds, index) => {
+        if (trendsChart.data.datasets[index]) {
+            trendsChart.data.datasets[index].data = ds.data;
+        }
+    });
+    trendsChart.update();
+}
+
+// Period selector event
+document.addEventListener('DOMContentLoaded', () => {
+    const periodSelect = document.getElementById('chart-period');
+    if (periodSelect) {
+        periodSelect.addEventListener('change', updateTrendsChart);
+    }
+});
 
 // ============================================
 // INIT
@@ -219,6 +377,7 @@ function startAutoRefresh() {
 document.addEventListener('DOMContentLoaded', () => {
     fetchStats();
     fetchEmails();
+    initTrendsChart();
     startAutoRefresh();
 
     console.log('📧 Email Monitor Dashboard initialized');
