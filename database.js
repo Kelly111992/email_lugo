@@ -1,12 +1,36 @@
-const { createClient } = require('@supabase/supabase-js');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+const fs = require('fs');
 
-// ============================================
-// CONFIGURACIÓN DE SUPABASE
-// ============================================
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gmail-monitor-supabase.ckoomq.easypanel.host';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE';
+const dbPath = path.join(__dirname, 'emails.db');
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// Crear la base de datos
+const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error('❌ Error al abrir la base de datos SQLite:', err.message);
+    } else {
+        console.log('✅ SQLite conectado');
+        initDatabase();
+    }
+});
+
+// Inicializar tablas
+function initDatabase() {
+    db.run(`CREATE TABLE IF NOT EXISTS emails (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        from_address TEXT NOT NULL,
+        from_name TEXT,
+        subject TEXT,
+        body_preview TEXT,
+        source TEXT NOT NULL,
+        received_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        raw_data TEXT
+    )`, (err) => {
+        if (err) {
+            console.error('❌ Error al crear tabla:', err.message);
+        }
+    });
+}
 
 // Clasificar correo por dominio
 function classifyEmail(fromAddress) {
@@ -18,137 +42,98 @@ function classifyEmail(fromAddress) {
         return 'inmuebles24';
     } else if (address.includes('solicitudes@proppit.com') || address.includes('@proppit.com')) {
         return 'proppit';
-    } else if (address.includes('inbox.easybroker.com') || address.includes('@easybroker.com')) {
+    } else if (address.includes('easybroker.com')) {
         return 'easybroker';
-    } else if (address.includes('usuarios.vivanuncios.com.mx') || address.includes('@vivanuncios.com')) {
+    } else if (address.includes('vivanuncios.com.mx')) {
         return 'vivanuncios';
-    } else if (address.includes('no-responder@mercadolibre.com') || address.includes('@mercadolibre.com')) {
+    } else if (address.includes('mercado-libre.com.mx') || address.includes('mercadolibre.com')) {
         return 'mercadolibre';
+    } else {
+        return 'otros';
     }
-
-    return 'otros';
-}
-
-// Inicializar (en Supabase no es estrictamente necesario crear la tabla aquí si ya se creó en el panel)
-async function initDatabase() {
-    console.log('✅ Supabase conectado');
-    return true;
 }
 
 // Insertar un nuevo correo
 async function insertEmail(emailData) {
-    const fromAddress = emailData.from?.emailAddress?.address ||
-        emailData.from?.address ||
-        emailData.from ||
-        'unknown';
-
-    const fromName = emailData.from?.emailAddress?.name ||
-        emailData.from?.name ||
-        '';
-
+    const fromAddress = emailData.from?.emailAddress?.address || emailData.from?.address || emailAddress || 'Desconocido';
+    const fromName = emailData.from?.emailAddress?.name || emailData.from?.name || 'Sin nombre';
+    const subject = emailData.subject || '(Sin asunto)';
+    const bodyPreview = emailData.bodyPreview || emailData.body?.content || '';
     const source = classifyEmail(fromAddress);
+    const rawData = JSON.stringify(emailData);
 
-    const { data, error } = await supabase
-        .from('emails')
-        .insert([
-            {
-                from_address: fromAddress,
-                from_name: fromName,
-                subject: emailData.subject || '(Sin asunto)',
-                body_preview: emailData.bodyPreview || emailData.body?.content || '',
-                source: source,
-                raw_data: emailData
+    return new Promise((resolve, reject) => {
+        const sql = `INSERT INTO emails (from_address, from_name, subject, body_preview, source, raw_data) VALUES (?, ?, ?, ?, ?, ?)`;
+
+        db.run(sql, [fromAddress, fromName, subject, bodyPreview, source, rawData], function (err) {
+            if (err) {
+                console.error('❌ Error al insertar:', err.message);
+                reject(err);
+            } else {
+                resolve({ id: this.lastID, source });
             }
-        ])
-        .select();
-
-    if (error) {
-        console.error('❌ Error al insertar en Supabase:', error);
-        throw error;
-    }
-
-    return {
-        id: data[0].id,
-        source: source
-    };
+        });
+    });
 }
 
 // Obtener todos los correos
-async function getAllEmails(limit = 100, source = null) {
-    let query = supabase
-        .from('emails')
-        .select('*')
-        .order('received_at', { ascending: false })
-        .limit(limit);
-
-    if (source && source !== 'all') {
-        query = query.eq('source', source);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-        console.error('❌ Error al obtener correos de Supabase:', error);
-        return [];
-    }
-
-    return data;
+async function getAllEmails() {
+    return new Promise((resolve, reject) => {
+        db.all('SELECT * FROM emails ORDER BY received_at DESC', [], (err, rows) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(rows);
+            }
+        });
+    });
 }
 
 // Obtener estadísticas
 async function getStats() {
-    const { data, error } = await supabase
-        .from('emails')
-        .select('source');
-
-    if (error) {
-        console.error('❌ Error al obtener estadísticas:', error);
-        return { total: 0, personal: 0, inmuebles24: 0, proppit: 0, easybroker: 0, vivanuncios: 0, mercadolibre: 0, otros: 0 };
-    }
-
-    const stats = {
-        total: data.length,
-        personal: 0,
-        inmuebles24: 0,
-        proppit: 0,
-        easybroker: 0,
-        vivanuncios: 0,
-        mercadolibre: 0,
-        otros: 0
-    };
-
-    data.forEach(row => {
-        if (stats[row.source] !== undefined) {
-            stats[row.source]++;
-        } else {
-            stats.otros++;
-        }
+    return new Promise((resolve, reject) => {
+        const sql = `
+            SELECT 
+                source, 
+                COUNT(*) as count 
+            FROM emails 
+            GROUP BY source
+        `;
+        db.all(sql, [], (err, rows) => {
+            if (err) {
+                reject(err);
+            } else {
+                const stats = {
+                    total: 0,
+                    bySource: {}
+                };
+                rows.forEach(row => {
+                    stats.total += row.count;
+                    stats.bySource[row.source] = row.count;
+                });
+                resolve(stats);
+            }
+        });
     });
-
-    return stats;
 }
 
-// Obtener un correo por ID
+// Obtener correo por ID
 async function getEmailById(id) {
-    const { data, error } = await supabase
-        .from('emails')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-    if (error) {
-        console.error('❌ Error al obtener correo:', error);
-        return null;
-    }
-
-    return data;
+    return new Promise((resolve, reject) => {
+        db.get('SELECT * FROM emails WHERE id = ?', [id], (err, row) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(row);
+            }
+        });
+    });
 }
 
 module.exports = {
-    initDatabase,
+    initDatabase: () => Promise.resolve(), // SQLite ya se inicializa en el constructor
     insertEmail,
     getAllEmails,
     getStats,
-    getEmailById,
-    classifyEmail
+    getEmailById
 };
