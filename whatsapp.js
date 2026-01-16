@@ -162,19 +162,25 @@ function extractClientName(emailData) {
         return nombreHtmlMatch[1].trim();
     }
 
-    // Patrón 4: "From: NOMBRE mediante Inmuebles24" en el cuerpo
-    const fromBodyMatch = fullBody.match(/From:\s*([^<\n]+)\s*mediante\s*(?:Inmuebles24|Proppit)/i);
-    if (fromBodyMatch) {
-        return fromBodyMatch[1].trim();
+    // Patrón 4: EasyBroker - "Enviado por:\n NOMBRE\n EMAIL" (nombre en línea después de Enviado por)
+    const easybrokerMatch = bodyPreview.match(/Enviado por:\s*\n\s*([^\n@]+)\s*\n/i);
+    if (easybrokerMatch && easybrokerMatch[1].trim().length > 1 && !easybrokerMatch[1].includes('@')) {
+        return easybrokerMatch[1].trim();
     }
 
-    // Patrón 5: "Enviado por:" seguido de nombre
-    const enviadoPorMatch = fullBody.match(/Enviado por:\s*\n?\s*([^\n<@]+)/i);
+    // Patrón 5: "Enviado por:" seguido de nombre en la misma línea
+    const enviadoPorMatch = fullBody.match(/Enviado por:\s*([^\n<@]+)/i);
     if (enviadoPorMatch && enviadoPorMatch[1].trim().length > 2) {
         return enviadoPorMatch[1].trim();
     }
 
-    // Patrón 6: "Nombre:" o "Cliente:" en texto plano
+    // Patrón 6: MercadoLibre/Vivanuncios - "De: NOMBRE" o "Interesado: NOMBRE"
+    const deMatch = bodyPreview.match(/(?:De|Interesado|Contacto|Cliente):\s*([^\n<@]+)/i);
+    if (deMatch && deMatch[1].trim().length > 2) {
+        return deMatch[1].trim();
+    }
+
+    // Patrón 7: "Nombre:" o "Cliente:" en texto plano
     const nombreMatch = bodyPreview.match(/(?:Nombre|Cliente|Name):\s*([^\n<@]+)/i);
     if (nombreMatch && nombreMatch[1].trim().length > 2) {
         return nombreMatch[1].trim();
@@ -202,10 +208,22 @@ function extractClientPhone(emailData) {
         return telefonoHtmlMatch[1].trim();
     }
 
-    // Patrón 2: "Teléfono:" o "Tel:" en texto
-    const telMatch = fullBody.match(/(?:teléfono|telefono|cel|celular|móvil|movil|whatsapp|phone):?\s*(\+?[\d\s\-\(\)]{10,})/i);
+    // Patrón 2: Número de teléfono mexicano en el texto (52XXXXXXXXXX o 10 dígitos)
+    const mexicanPhoneMatch = bodyPreview.match(/\b(52\d{10}|\d{10})\b/);
+    if (mexicanPhoneMatch) {
+        return mexicanPhoneMatch[1];
+    }
+
+    // Patrón 3: "Teléfono:" o "Tel:" seguido de número
+    const telMatch = fullBody.match(/(?:teléfono|telefono|tel|cel|celular|móvil|movil|whatsapp|phone):?\s*(\+?[\d\s\-\(\)]{10,})/i);
     if (telMatch) {
-        return telMatch[1].trim();
+        return telMatch[1].replace(/\s/g, '').trim();
+    }
+
+    // Patrón 4: Número con formato (XX) XXXX-XXXX
+    const formattedPhone = bodyPreview.match(/\(?\d{2,3}\)?[\s\-]?\d{4}[\s\-]?\d{4}/);
+    if (formattedPhone) {
+        return formattedPhone[0].replace(/[\s\-\(\)]/g, '');
     }
 
     return 'No detectado';
@@ -219,21 +237,43 @@ function extractClientEmail(emailData) {
     const bodyPreview = emailData.bodyPreview || '';
     const fullBody = bodyContent + ' ' + bodyPreview;
 
+    // Lista de dominios de portales a ignorar
+    const portalDomains = [
+        'usuarios.inmuebles24',
+        'inbox.easybroker.com',
+        'easybroker.com',
+        'proppit.com',
+        'vivanuncios.com',
+        'mercadolibre.com',
+        'mercado-libre.com'
+    ];
+
     // Patrón 1: En HTML "mailto:EMAIL"
     const mailtoMatch = fullBody.match(/mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
     if (mailtoMatch) {
-        // Evitar emails del portal (usuarios.inmuebles24, etc)
-        if (!mailtoMatch[1].includes('usuarios.inmuebles24') &&
-            !mailtoMatch[1].includes('easybroker.com') &&
-            !mailtoMatch[1].includes('proppit.com')) {
+        const email = mailtoMatch[1].toLowerCase();
+        if (!portalDomains.some(domain => email.includes(domain))) {
             return mailtoMatch[1];
         }
     }
 
-    // Patrón 2: "E-mail:" o "Email:" seguido del email
+    // Patrón 2: Email en texto plano (buscar todos y filtrar portales)
+    const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi;
+    const emails = bodyPreview.match(emailRegex) || [];
+    for (const email of emails) {
+        const lowerEmail = email.toLowerCase();
+        if (!portalDomains.some(domain => lowerEmail.includes(domain))) {
+            return email;
+        }
+    }
+
+    // Patrón 3: "E-mail:" o "Email:" seguido del email
     const emailMatch = fullBody.match(/(?:e-?mail|correo):\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
     if (emailMatch) {
-        return emailMatch[1];
+        const email = emailMatch[1].toLowerCase();
+        if (!portalDomains.some(domain => email.includes(domain))) {
+            return emailMatch[1];
+        }
     }
 
     return null;
