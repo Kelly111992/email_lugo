@@ -82,10 +82,21 @@ async function insertEmail(emailData) {
     });
 }
 
-// Obtener todos los correos
-async function getAllEmails() {
+// Obtener todos los correos con filtros opcionales
+async function getAllEmails(limit = 100, source = null) {
     return new Promise((resolve, reject) => {
-        db.all('SELECT * FROM emails ORDER BY received_at DESC', [], (err, rows) => {
+        let sql = 'SELECT * FROM emails';
+        const params = [];
+
+        if (source && source !== 'all') {
+            sql += ' WHERE source = ?';
+            params.push(source);
+        }
+
+        sql += ' ORDER BY received_at DESC LIMIT ?';
+        params.push(limit);
+
+        db.all(sql, params, (err, rows) => {
             if (err) {
                 reject(err);
             } else {
