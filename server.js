@@ -22,7 +22,7 @@ app.post('/api/emails', async (req, res) => {
         console.log('📧 Correo recibido:', JSON.stringify(req.body, null, 2));
 
         const emailData = req.body;
-        const result = database.insertEmail(emailData);
+        const result = await database.insertEmail(emailData);
 
         console.log(`✅ Correo guardado - ID: ${result.id}, Clasificado como: ${result.source}`);
 
@@ -53,12 +53,12 @@ app.post('/api/emails', async (req, res) => {
 });
 
 // Obtener todos los correos
-app.get('/api/emails', (req, res) => {
+app.get('/api/emails', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 100;
         const source = req.query.source || null;
 
-        const emails = database.getAllEmails(limit, source);
+        const emails = await database.getAllEmails(limit, source);
         res.json(emails);
     } catch (error) {
         console.error('❌ Error al obtener correos:', error);
@@ -67,9 +67,9 @@ app.get('/api/emails', (req, res) => {
 });
 
 // Obtener estadísticas
-app.get('/api/stats', (req, res) => {
+app.get('/api/stats', async (req, res) => {
     try {
-        const stats = database.getStats();
+        const stats = await database.getStats();
         res.json(stats);
     } catch (error) {
         console.error('❌ Error al obtener estadísticas:', error);
@@ -78,9 +78,9 @@ app.get('/api/stats', (req, res) => {
 });
 
 // Obtener un correo específico
-app.get('/api/emails/:id', (req, res) => {
+app.get('/api/emails/:id', async (req, res) => {
     try {
-        const email = database.getEmailById(parseInt(req.params.id));
+        const email = await database.getEmailById(parseInt(req.params.id));
         if (email) {
             res.json(email);
         } else {
