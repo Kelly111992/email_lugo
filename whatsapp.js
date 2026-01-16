@@ -8,7 +8,7 @@ const EVOLUTION_CONFIG = {
     baseUrl: process.env.EVOLUTION_API_URL || 'https://evolutionapi-evolution-api.ckoomq.easypanel.host',
     instanceName: process.env.EVOLUTION_INSTANCE || 'lugo_email',
     apiKey: process.env.EVOLUTION_API_KEY || '429683C4C977415CAAFCCE10F7D57E11',
-    destinationNumber: process.env.WHATSAPP_DESTINATION || '523318043673'
+    destinationNumbers: (process.env.WHATSAPP_DESTINATION || '523318043673,523312505239').split(',')
 };
 
 // ============================================
@@ -84,12 +84,12 @@ async function getPropertyFromEasyBroker(propertyCode) {
 // ============================================
 // ENVIAR MENSAJE DE WHATSAPP
 // ============================================
-async function sendWhatsAppMessage(message) {
+async function sendWhatsAppMessage(message, destinationNumber) {
     return new Promise((resolve, reject) => {
         const url = new URL(`${EVOLUTION_CONFIG.baseUrl}/message/sendText/${EVOLUTION_CONFIG.instanceName}`);
 
         const postData = JSON.stringify({
-            number: EVOLUTION_CONFIG.destinationNumber,
+            number: destinationNumber,
             text: message
         });
 
@@ -116,17 +116,17 @@ async function sendWhatsAppMessage(message) {
 
             res.on('end', () => {
                 if (res.statusCode >= 200 && res.statusCode < 300) {
-                    console.log('✅ WhatsApp enviado exitosamente');
+                    console.log(`✅ WhatsApp enviado a ${destinationNumber}`);
                     resolve({ success: true, response: JSON.parse(data) });
                 } else {
-                    console.error('❌ Error en respuesta de Evolution API:', res.statusCode, data);
+                    console.error(`❌ Error en respuesta de Evolution API (${destinationNumber}):`, res.statusCode, data);
                     resolve({ success: false, error: data });
                 }
             });
         });
 
         req.on('error', (error) => {
-            console.error('❌ Error al enviar WhatsApp:', error.message);
+            console.error(`❌ Error al enviar WhatsApp a ${destinationNumber}:`, error.message);
             resolve({ success: false, error: error.message });
         });
 
@@ -248,8 +248,20 @@ async function notifyNewEmail(emailData, source) {
 
         // Formatear mensaje con la URL de la propiedad (si existe)
         const message = formatEmailNotification(emailData, source, propertyUrl, propertyCode);
-        const result = await sendWhatsAppMessage(message);
-        return result;
+
+        // Enviar a todos los números configurados
+        const sendPromises = EVOLUTION_CONFIG.destinationNumbers.map(number =>
+            sendWhatsAppMessage(message, number.trim())
+        );
+
+        const results = await Promise.all(sendPromises);
+
+        // Retornar éxito si al menos uno se envió correctamente
+        const atLeastOneSuccess = results.some(r => r.success);
+        return {
+            success: atLeastOneSuccess,
+            results
+        };
     } catch (error) {
         console.error('❌ Error al notificar por WhatsApp:', error);
         return { success: false, error: error.message };
