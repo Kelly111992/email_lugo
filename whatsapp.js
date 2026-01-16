@@ -138,7 +138,7 @@ async function sendWhatsAppMessage(message, destinationNumber) {
 // ============================================
 // FORMATEAR NOTIFICACIÓN DE EMAIL
 // ============================================
-function formatEmailNotification(emailData, source, propertyUrl = null, propertyCode = null) {
+function formatEmailNotification(emailData, source, propertyUrl = null, propertyCode = null, linkInmobiliarioUrl = null) {
     const fromAddress = emailData.from?.emailAddress?.address ||
         emailData.from?.address ||
         emailData.from ||
@@ -210,7 +210,11 @@ ${emoji} *Origen:* ${sourceName}
     }
 
     if (propertyUrl) {
-        message += `\n🔗 *Propiedad:* ${propertyUrl}`;
+        message += `\n🔗 *EasyBroker:* ${propertyUrl}`;
+    }
+
+    if (linkInmobiliarioUrl) {
+        message += `\n🏠 *Link Inmobiliario:* ${linkInmobiliarioUrl}`;
     }
 
     message += `
@@ -246,8 +250,15 @@ async function notifyNewEmail(emailData, source) {
             }
         }
 
-        // Formatear mensaje con la URL de la propiedad (si existe)
-        const message = formatEmailNotification(emailData, source, propertyUrl, propertyCode);
+        // Generar URL de Link Inmobiliario si hay código
+        let linkInmobiliarioUrl = null;
+        if (propertyCode) {
+            linkInmobiliarioUrl = `https://www.linkinmobiliario.com.mx/search_text?search%5Btext%5D=${propertyCode}&commit=Ir`;
+            console.log(`🏠 URL de Link Inmobiliario: ${linkInmobiliarioUrl}`);
+        }
+
+        // Formatear mensaje con las URLs de la propiedad (si existen)
+        const message = formatEmailNotification(emailData, source, propertyUrl, propertyCode, linkInmobiliarioUrl);
 
         // Enviar a todos los números configurados
         const sendPromises = EVOLUTION_CONFIG.destinationNumbers.map(number =>
