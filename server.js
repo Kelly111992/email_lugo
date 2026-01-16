@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const database = require('./database');
+const whatsapp = require('./whatsapp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,7 +17,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ============================================
 
 // Recibir correos desde n8n (webhook)
-app.post('/api/emails', (req, res) => {
+app.post('/api/emails', async (req, res) => {
     try {
         console.log('📧 Correo recibido:', JSON.stringify(req.body, null, 2));
 
@@ -25,11 +26,22 @@ app.post('/api/emails', (req, res) => {
 
         console.log(`✅ Correo guardado - ID: ${result.id}, Clasificado como: ${result.source}`);
 
+        // Enviar notificación a WhatsApp
+        console.log('📱 Enviando notificación a WhatsApp...');
+        const whatsappResult = await whatsapp.notifyNewEmail(emailData, result.source);
+
+        if (whatsappResult.success) {
+            console.log('✅ Notificación WhatsApp enviada');
+        } else {
+            console.log('⚠️ No se pudo enviar WhatsApp:', whatsappResult.error);
+        }
+
         res.json({
             success: true,
             message: 'Correo recibido y clasificado',
             id: result.id,
-            source: result.source
+            source: result.source,
+            whatsappSent: whatsappResult.success
         });
     } catch (error) {
         console.error('❌ Error al procesar correo:', error);
