@@ -8,7 +8,7 @@ const EVOLUTION_CONFIG = {
     baseUrl: process.env.EVOLUTION_API_URL || 'https://evolutionapi-evolution-api.ckoomq.easypanel.host',
     instanceName: process.env.EVOLUTION_INSTANCE || 'lugo_email',
     apiKey: process.env.EVOLUTION_API_KEY || '429683C4C977415CAAFCCE10F7D57E11',
-    destinationNumber: process.env.WHATSAPP_DESTINATION || '5218145520483'
+    destinationNumber: process.env.WHATSAPP_DESTINATION || '523318043673'
 };
 
 // ============================================
