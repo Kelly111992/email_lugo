@@ -315,7 +315,7 @@ ${emoji} *Origen:* ${sourceName}
     }
 
     if (propertyUrl) {
-        message += `\n🔗 *EasyBroker:* ${propertyUrl}`;
+        message += `\n🔗 *Link EasyBroker:* ${propertyUrl}`;
     }
 
     if (linkInmobiliarioUrl) {
