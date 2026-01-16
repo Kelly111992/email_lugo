@@ -111,7 +111,7 @@ async function startServer() {
         // Initialize database first
         await database.initDatabase();
 
-        app.listen(PORT, () => {
+        app.listen(PORT, '0.0.0.0', () => {
             console.log(`
 ╔════════════════════════════════════════════════════════╗
 ║                                                        ║
