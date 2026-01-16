@@ -61,7 +61,7 @@ function classifyEmail(fromAddress) {
 
 // Insertar un nuevo correo
 async function insertEmail(emailData) {
-    const fromAddress = emailData.from?.emailAddress?.address || emailData.from?.address || emailAddress || 'Desconocido';
+    const fromAddress = emailData.from?.emailAddress?.address || emailData.from?.address || emailData.from || 'Desconocido';
     const fromName = emailData.from?.emailAddress?.name || emailData.from?.name || 'Sin nombre';
     const subject = emailData.subject || '(Sin asunto)';
     const bodyPreview = emailData.bodyPreview || emailData.body?.content || '';
