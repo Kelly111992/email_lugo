@@ -139,40 +139,104 @@ async function sendWhatsAppMessage(message, destinationNumber) {
 // EXTRAER NOMBRE DEL CLIENTE
 // ============================================
 function extractClientName(emailData) {
-    const bodyPreview = emailData.bodyPreview || emailData.body?.content || '';
-    const subject = emailData.subject || '';
+    const bodyContent = emailData.body?.content || '';
+    const bodyPreview = emailData.bodyPreview || '';
+    const fullBody = bodyContent + ' ' + bodyPreview;
 
-    // Patrón 1: "From: NOMBRE mediante Inmuebles24" o "From: NOMBRE mediante Proppit"
-    const inmuebles24Match = bodyPreview.match(/From:\s*([^<\n]+)\s*mediante\s*(?:Inmuebles24|Proppit)/i);
-    if (inmuebles24Match) {
-        return inmuebles24Match[1].trim();
+    // Patrón 1: Del campo from.emailAddress.name "NOMBRE mediante Inmuebles24/Proppit"
+    const fromName = emailData.from?.emailAddress?.name || emailData.from?.name || '';
+    const medianteMatch = fromName.match(/^(.+?)\s+mediante\s+(?:Inmuebles24|Proppit)/i);
+    if (medianteMatch) {
+        return medianteMatch[1].trim();
     }
 
-    // Patrón 2: "Enviado por:" seguido de nombre en la siguiente línea
-    const enviadoPorMatch = bodyPreview.match(/Enviado por:\s*\n?\s*([^\n<@]+)/i);
-    if (enviadoPorMatch) {
+    // Patrón 2: En el HTML "Nombre y apellido:</span>...>NOMBRE</span>"
+    const nombreApellidoMatch = fullBody.match(/Nombre y apellido:<\/span>\s*<span[^>]*>([^<]+)<\/span>/i);
+    if (nombreApellidoMatch) {
+        return nombreApellidoMatch[1].trim();
+    }
+
+    // Patrón 3: "Nombre:</span>...>NOMBRE</span>" (variante)
+    const nombreHtmlMatch = fullBody.match(/Nombre:<\/span>\s*<span[^>]*>([^<]+)<\/span>/i);
+    if (nombreHtmlMatch) {
+        return nombreHtmlMatch[1].trim();
+    }
+
+    // Patrón 4: "From: NOMBRE mediante Inmuebles24" en el cuerpo
+    const fromBodyMatch = fullBody.match(/From:\s*([^<\n]+)\s*mediante\s*(?:Inmuebles24|Proppit)/i);
+    if (fromBodyMatch) {
+        return fromBodyMatch[1].trim();
+    }
+
+    // Patrón 5: "Enviado por:" seguido de nombre
+    const enviadoPorMatch = fullBody.match(/Enviado por:\s*\n?\s*([^\n<@]+)/i);
+    if (enviadoPorMatch && enviadoPorMatch[1].trim().length > 2) {
         return enviadoPorMatch[1].trim();
     }
 
-    // Patrón 3: "Nombre:" o "Cliente:" seguido del nombre
+    // Patrón 6: "Nombre:" o "Cliente:" en texto plano
     const nombreMatch = bodyPreview.match(/(?:Nombre|Cliente|Name):\s*([^\n<@]+)/i);
-    if (nombreMatch) {
+    if (nombreMatch && nombreMatch[1].trim().length > 2) {
         return nombreMatch[1].trim();
     }
 
-    // Patrón 4: "De:" seguido del nombre (común en algunos portales)
-    const deMatch = bodyPreview.match(/De:\s*([^<\n@]+?)(?:\s*<|$|\n)/i);
-    if (deMatch && deMatch[1].trim().length > 2) {
-        return deMatch[1].trim();
-    }
-
-    // Fallback: usar el nombre del campo from del email
-    const fromName = emailData.from?.emailAddress?.name || emailData.from?.name || null;
-    if (fromName && fromName !== 'Sin nombre') {
+    // Fallback: usar el nombre del campo from (sin "mediante...")
+    if (fromName && fromName !== 'Sin nombre' && !fromName.includes('@')) {
         return fromName;
     }
 
     return 'No detectado';
+}
+
+// ============================================
+// EXTRAER TELÉFONO DEL CLIENTE
+// ============================================
+function extractClientPhone(emailData) {
+    const bodyContent = emailData.body?.content || '';
+    const bodyPreview = emailData.bodyPreview || '';
+    const fullBody = bodyContent + ' ' + bodyPreview;
+
+    // Patrón 1: En HTML "Teléfono:</span>...>NUMERO</span>"
+    const telefonoHtmlMatch = fullBody.match(/Teléfono:<\/span>\s*<span[^>]*>([0-9+\s\-\(\)]{10,})<\/span>/i);
+    if (telefonoHtmlMatch) {
+        return telefonoHtmlMatch[1].trim();
+    }
+
+    // Patrón 2: "Teléfono:" o "Tel:" en texto
+    const telMatch = fullBody.match(/(?:teléfono|telefono|cel|celular|móvil|movil|whatsapp|phone):?\s*(\+?[\d\s\-\(\)]{10,})/i);
+    if (telMatch) {
+        return telMatch[1].trim();
+    }
+
+    return 'No detectado';
+}
+
+// ============================================
+// EXTRAER EMAIL DEL CLIENTE
+// ============================================
+function extractClientEmail(emailData) {
+    const bodyContent = emailData.body?.content || '';
+    const bodyPreview = emailData.bodyPreview || '';
+    const fullBody = bodyContent + ' ' + bodyPreview;
+
+    // Patrón 1: En HTML "mailto:EMAIL"
+    const mailtoMatch = fullBody.match(/mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    if (mailtoMatch) {
+        // Evitar emails del portal (usuarios.inmuebles24, etc)
+        if (!mailtoMatch[1].includes('usuarios.inmuebles24') &&
+            !mailtoMatch[1].includes('easybroker.com') &&
+            !mailtoMatch[1].includes('proppit.com')) {
+            return mailtoMatch[1];
+        }
+    }
+
+    // Patrón 2: "E-mail:" o "Email:" seguido del email
+    const emailMatch = fullBody.match(/(?:e-?mail|correo):\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    if (emailMatch) {
+        return emailMatch[1];
+    }
+
+    return null;
 }
 
 // ============================================
@@ -184,8 +248,10 @@ function formatEmailNotification(emailData, source, propertyUrl = null, property
         emailData.from ||
         'Desconocido';
 
-    // Extraer nombre del cliente del cuerpo del correo
+    // Extraer información del cliente
     const clientName = extractClientName(emailData);
+    const clientPhone = extractClientPhone(emailData);
+    const clientEmail = extractClientEmail(emailData);
 
     const subject = emailData.subject || '(Sin asunto)';
     const bodyPreview = emailData.bodyPreview || emailData.body?.content || '';
@@ -194,10 +260,6 @@ function formatEmailNotification(emailData, source, propertyUrl = null, property
     const truncatedBody = bodyPreview.length > 300
         ? bodyPreview.substring(0, 300) + '...'
         : bodyPreview;
-
-    // Intentar extraer teléfono del cuerpo del mensaje
-    const phoneMatch = bodyPreview.match(/(?:tel[éeéf]fono|cel|celular|móvil|movil|whatsapp)?:?\s*(\+?[\d\s\-\(\)]{10,})/i);
-    const phone = phoneMatch ? phoneMatch[1].trim() : 'No detectado';
 
     // Emoji según origen
     const sourceEmojis = {
@@ -240,8 +302,12 @@ function formatEmailNotification(emailData, source, propertyUrl = null, property
 
 ${emoji} *Origen:* ${sourceName}
 👤 *Cliente:* ${clientName}
-📧 *Email:* ${fromAddress}
-📱 *Teléfono:* ${phone}`;
+📱 *Teléfono:* ${clientPhone}`;
+
+    // Agregar email del cliente si es diferente al del portal
+    if (clientEmail) {
+        message += `\n📧 *Email:* ${clientEmail}`;
+    }
 
     // Agregar código de propiedad y URL si existen
     if (propertyCode) {
@@ -259,9 +325,6 @@ ${emoji} *Origen:* ${sourceName}
     message += `
 
 📝 *Asunto:* ${subject}
-
-💬 *Vista previa:*
-${truncatedBody}
 
 🕐 ${dateStr} ${timeStr}`;
 
@@ -324,6 +387,9 @@ module.exports = {
     notifyNewEmail,
     extractPropertyCode,
     getPropertyFromEasyBroker,
+    extractClientName,
+    extractClientPhone,
+    extractClientEmail,
     EVOLUTION_CONFIG,
     EASYBROKER_CONFIG
 };
