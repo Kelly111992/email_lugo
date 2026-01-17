@@ -27,11 +27,15 @@ app.post('/api/emails', async (req, res) => {
         // PROTECCIÓN CONTRA BUCLES (Anti-Loop)
         // Si el asunto comienza con nuestro propio patrón de notificación, lo ignoramos.
         // También ignoramos correos de 'Mailer Daemon' o rebotes comunes.
+        // También ignoramos correos de nuestro propio dominio (internos).
+        const fromAddress = (emailData.from?.emailAddress?.address || emailData.from?.address || '').toLowerCase();
+
         if (subject.includes('🏠 Nuevo Lead') ||
             subject.includes('Delivery Status Notification') ||
-            emailData.from?.address?.includes('mailer-daemon')) {
+            fromAddress.includes('mailer-daemon') ||
+            fromAddress.includes('@linkinmobiliario.com.mx')) {
 
-            console.log('🛑 Ignorando correo del sistema/rebote para evitar bucles.');
+            console.log(`🛑 Ignorando correo del sistema/interno para evitar bucles. From: ${fromAddress}`);
             return res.json({
                 success: true,
                 message: 'Correo del sistema ignorado (Anti-Loop)',
