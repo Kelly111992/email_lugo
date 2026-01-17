@@ -34,26 +34,34 @@ const N8N_EMAIL_WEBHOOK = process.env.N8N_EMAIL_WEBHOOK || 'https://evolutionapi
 function getMexicoDateTime() {
     const now = new Date();
 
-    // MÉXICO (Zona Central) ya no usa Horario de Verano (DST) desde 2023.
-    // Se mantiene fijo en UTC-6.
-    const offsetHours = -6;
+    // Usar API de Internacionalización para obtener hora exacta de CDMX
+    // Esto maneja automáticamente offsets y formatos
+    const options = {
+        timeZone: 'America/Mexico_City',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    };
 
-    // Calcular hora de México
-    const mexicoTime = new Date(now.getTime() + (offsetHours * 60 * 60 * 1000));
+    // Formato esperado: "DD/MM/YYYY, HH:MM a.m." (puede variar ligeramente según nodo)
+    const formatter = new Intl.DateTimeFormat('es-MX', options);
+    const parts = formatter.formatToParts(now);
 
-    // Formatear fecha: DD/MM/YYYY
-    const day = String(mexicoTime.getUTCDate()).padStart(2, '0');
-    const month = String(mexicoTime.getUTCMonth() + 1).padStart(2, '0');
-    const year = mexicoTime.getUTCFullYear();
+    // Extraer partes para asegurar formato DD/MM/YYYY HH:MM a.m./p.m.
+    const getPart = (type) => parts.find(p => p.type === type)?.value || '';
+
+    const day = getPart('day');
+    const month = getPart('month');
+    const year = getPart('year');
+    const hour = getPart('hour');
+    const minute = getPart('minute');
+    const dayPeriod = getPart('dayPeriod').toLowerCase().replace('.', '') + '.'; // am/pm -> a.m./p.m. aprox
+
     const dateStr = `${day}/${month}/${year}`;
-
-    // Formatear hora: HH:MM a.m./p.m.
-    let hours = mexicoTime.getUTCHours();
-    const minutes = String(mexicoTime.getUTCMinutes()).padStart(2, '0');
-    const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
-    hours = hours % 12;
-    hours = hours ? hours : 12; // 0 -> 12
-    const timeStr = `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+    const timeStr = `${hour}:${minute} ${dayPeriod === 'am.' ? 'a.m.' : dayPeriod === 'pm.' ? 'p.m.' : dayPeriod}`;
 
     return { dateStr, timeStr };
 }
