@@ -136,33 +136,51 @@ async function sendWhatsAppMessage(message, destinationNumber) {
 }
 
 // ============================================
-// EXTRAER NOMBRE DEL CLIENTE
+// EXTRAER NOMBRE COMPLETO DEL CLIENTE (NOMBRE Y APELLIDOS)
 // ============================================
 function extractClientName(emailData) {
     const bodyContent = emailData.body?.content || '';
     const bodyPreview = emailData.bodyPreview || '';
     const fullBody = bodyContent + ' ' + bodyPreview;
 
-    // Patrón 1: Del campo from.emailAddress.name "NOMBRE mediante Inmuebles24/Proppit"
+    // Patrón 1: Del campo from.emailAddress.name "NOMBRE APELLIDO mediante Inmuebles24/Proppit"
     const fromName = emailData.from?.emailAddress?.name || emailData.from?.name || '';
     const medianteMatch = fromName.match(/^(.+?)\s+mediante\s+(?:Inmuebles24|Proppit)/i);
     if (medianteMatch) {
-        return medianteMatch[1].trim();
+        return medianteMatch[1].trim(); // Ya incluye nombre y apellidos
     }
 
-    // Patrón 2: En el HTML "Nombre y apellido:</span>...>NOMBRE</span>"
-    const nombreApellidoMatch = fullBody.match(/Nombre y apellido:<\/span>\s*<span[^>]*>([^<]+)<\/span>/i);
+    // Patrón 2: En el HTML "Nombre y apellido:</span>...<NOMBRE COMPLETO></span>" (Inmuebles24, Proppit)
+    const nombreApellidoMatch = fullBody.match(/Nombre y apellido:?<\/span>\s*<span[^>]*>([^<]+)<\/span>/i);
     if (nombreApellidoMatch) {
         return nombreApellidoMatch[1].trim();
     }
 
-    // Patrón 3: "Nombre:</span>...>NOMBRE</span>" (variante)
-    const nombreHtmlMatch = fullBody.match(/Nombre:<\/span>\s*<span[^>]*>([^<]+)<\/span>/i);
-    if (nombreHtmlMatch) {
-        return nombreHtmlMatch[1].trim();
+    // Patrón 2b: "Nombre y apellidos:" (variante con 's')
+    const nombreApellidosMatch = fullBody.match(/Nombre y apellidos:?<\/span>\s*<span[^>]*>([^<]+)<\/span>/i);
+    if (nombreApellidosMatch) {
+        return nombreApellidosMatch[1].trim();
     }
 
-    // Patrón 4: EasyBroker - "Enviado por:\n NOMBRE\n EMAIL" (nombre en línea después de Enviado por)
+    // Patrón 2c: "Nombre completo:" en HTML
+    const nombreCompletoHtmlMatch = fullBody.match(/Nombre completo:?<\/span>\s*<span[^>]*>([^<]+)<\/span>/i);
+    if (nombreCompletoHtmlMatch) {
+        return nombreCompletoHtmlMatch[1].trim();
+    }
+
+    // Patrón 3: "Nombre:</span>...<NOMBRE></span>" y buscar también apellido
+    const nombreHtmlMatch = fullBody.match(/Nombre:<\/span>\s*<span[^>]*>([^<]+)<\/span>/i);
+    if (nombreHtmlMatch) {
+        let nombreCompleto = nombreHtmlMatch[1].trim();
+        // Buscar apellido(s) por separado
+        const apellidoMatch = fullBody.match(/Apellidos?:<\/span>\s*<span[^>]*>([^<]+)<\/span>/i);
+        if (apellidoMatch) {
+            nombreCompleto += ' ' + apellidoMatch[1].trim();
+        }
+        return nombreCompleto;
+    }
+
+    // Patrón 4: EasyBroker - "Enviado por:\n NOMBRE COMPLETO\n EMAIL"
     const easybrokerMatch = bodyPreview.match(/Enviado por:\s*\n\s*([^\n@]+)\s*\n/i);
     if (easybrokerMatch && easybrokerMatch[1].trim().length > 1 && !easybrokerMatch[1].includes('@')) {
         return easybrokerMatch[1].trim();
@@ -180,10 +198,27 @@ function extractClientName(emailData) {
         return deMatch[1].trim();
     }
 
-    // Patrón 7: "Nombre:" o "Cliente:" en texto plano
-    const nombreMatch = bodyPreview.match(/(?:Nombre|Cliente|Name):\s*([^\n<@]+)/i);
-    if (nombreMatch && nombreMatch[1].trim().length > 2) {
-        return nombreMatch[1].trim();
+    // Patrón 7: "Nombre completo:" en texto plano
+    const nombreCompletoMatch = bodyPreview.match(/Nombre completo:\s*([^\n<@]+)/i);
+    if (nombreCompletoMatch && nombreCompletoMatch[1].trim().length > 2) {
+        return nombreCompletoMatch[1].trim();
+    }
+
+    // Patrón 8: "Nombre:" y "Apellido:" en texto plano (combinarlos)
+    const nombreTextoMatch = bodyPreview.match(/Nombre:\s*([^\n<@,]+)/i);
+    const apellidoTextoMatch = bodyPreview.match(/Apellidos?:\s*([^\n<@,]+)/i);
+    if (nombreTextoMatch && nombreTextoMatch[1].trim().length > 1) {
+        let nombreCompleto = nombreTextoMatch[1].trim();
+        if (apellidoTextoMatch && apellidoTextoMatch[1].trim().length > 1) {
+            nombreCompleto += ' ' + apellidoTextoMatch[1].trim();
+        }
+        return nombreCompleto;
+    }
+
+    // Patrón 9: "Nombre:" o "Cliente:" en texto plano (ya podría incluir apellidos)
+    const nombreSoloMatch = bodyPreview.match(/(?:Nombre|Cliente|Name):\s*([^\n<@]+)/i);
+    if (nombreSoloMatch && nombreSoloMatch[1].trim().length > 2) {
+        return nombreSoloMatch[1].trim();
     }
 
     // Fallback: usar el nombre del campo from (sin "mediante...")
@@ -341,7 +376,7 @@ function formatEmailNotification(emailData, source, propertyUrl = null, property
     let message = `📧 *NUEVO LEAD*
 
 ${emoji} *Origen:* ${sourceName}
-👤 *Cliente:* ${clientName}
+👤 *Nombre Completo:* ${clientName}
 📱 *Teléfono:* ${clientPhone}`;
 
     // Agregar email del cliente si es diferente al del portal
