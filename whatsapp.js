@@ -28,25 +28,24 @@ const N8N_EMAIL_WEBHOOK = process.env.N8N_EMAIL_WEBHOOK || 'https://evolutionapi
 // ============================================
 // FUNCIÓN PARA OBTENER FECHA/HORA DE MÉXICO
 // ============================================
+// ============================================
+// FUNCIÓN PARA OBTENER FECHA/HORA DE MÉXICO
+// ============================================
 function getMexicoDateTime() {
-    // Crear fecha en UTC
     const now = new Date();
 
-    // Offset de México: UTC-6 (horario estándar)
-    // Nota: México usa UTC-5 durante horario de verano (abril-octubre aprox)
-    const month = now.getUTCMonth(); // 0-11
-    // Horario de verano aproximado: abril (3) a octubre (9)
-    const isDST = month >= 3 && month <= 9;
-    const offsetHours = isDST ? -5 : -6;
+    // MÉXICO (Zona Central) ya no usa Horario de Verano (DST) desde 2023.
+    // Se mantiene fijo en UTC-6.
+    const offsetHours = -6;
 
     // Calcular hora de México
     const mexicoTime = new Date(now.getTime() + (offsetHours * 60 * 60 * 1000));
 
     // Formatear fecha: DD/MM/YYYY
     const day = String(mexicoTime.getUTCDate()).padStart(2, '0');
-    const monthStr = String(mexicoTime.getUTCMonth() + 1).padStart(2, '0');
+    const month = String(mexicoTime.getUTCMonth() + 1).padStart(2, '0');
     const year = mexicoTime.getUTCFullYear();
-    const dateStr = `${day}/${monthStr}/${year}`;
+    const dateStr = `${day}/${month}/${year}`;
 
     // Formatear hora: HH:MM a.m./p.m.
     let hours = mexicoTime.getUTCHours();
@@ -58,6 +57,10 @@ function getMexicoDateTime() {
 
     return { dateStr, timeStr };
 }
+//... (keeping other functions intact, just jump to notifyNewEmail modification if needed, but here we replace the function) ...
+// Actually I need to replace the function at the top, and the payload construction later. 
+// I will split this into two calls or use multi_replace.
+
 // ============================================
 // EXTRAER CÓDIGO DE PROPIEDAD DEL ASUNTO
 // ============================================
@@ -716,13 +719,16 @@ async function notifyNewEmail(emailData, source) {
                         mensaje: (emailData.bodyPreview || '').substring(0, 500)
                     },
                     propiedad: {
-                        codigo: propertyCode || null,
-                        urlEasyBroker: propertyUrl || null,
-                        urlLinkInmobiliario: linkInmobiliarioUrl || null
+                        codigo: propertyCode || 'No detectado',
+                        urlEasyBroker: propertyUrl || '',
+                        urlLinkInmobiliario: linkInmobiliarioUrl || ''
                     },
                     fecha: `${dateStr} ${timeStr}`,
+                    timestamp: new Date().toISOString(), // TIMESTAMP DE RESPALDO
                     emailSubject: `🏠 Nuevo Lead de ${sourceName}${propertyCode ? ` - ${propertyCode}` : ''}`
                 };
+
+                console.log('📦 Payload a enviar a N8N:', JSON.stringify(emailPayload, null, 2));
 
                 const result = await sendEmailViaN8N(emailPayload);
                 emailResults.push({

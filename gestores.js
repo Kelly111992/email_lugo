@@ -37,7 +37,6 @@ const GESTORES = {
     }
 };
 
-// Destinatarios fijos para todas las notificaciones
 const ADMIN_CONTACTS = [
     {
         nombre: 'Reinier Lugo',
