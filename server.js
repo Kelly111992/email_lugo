@@ -24,6 +24,15 @@ app.post('/api/emails', async (req, res) => {
         const emailData = req.body;
         const result = await database.insertEmail(emailData);
 
+        if (result.duplicate) {
+            console.log('🛑 Deteniendo proceso por correo duplicado.');
+            return res.json({
+                success: true,
+                message: 'Correo duplicado (ignorado)',
+                duplicate: true
+            });
+        }
+
         console.log(`✅ Correo guardado - ID: ${result.id}, Clasificado como: ${result.source}`);
 
         // Enviar notificación a WhatsApp

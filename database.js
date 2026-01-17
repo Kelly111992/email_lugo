@@ -69,15 +69,39 @@ async function insertEmail(emailData) {
     const rawData = JSON.stringify(emailData);
 
     return new Promise((resolve, reject) => {
-        const sql = `INSERT INTO emails (from_address, from_name, subject, body_preview, source, raw_data) VALUES (?, ?, ?, ?, ?, ?)`;
+        // Validación Anti-Duplicados:
+        // Verificar si ya existe un correo con el mismo asunto y preview recibido en los últimos 5 minutos
+        const checkDuplicateSql = `
+            SELECT id FROM emails 
+            WHERE from_address = ? 
+            AND subject = ? 
+            AND body_preview = ? 
+            AND received_at >= datetime('now', '-5 minutes')
+        `;
 
-        db.run(sql, [fromAddress, fromName, subject, bodyPreview, source, rawData], function (err) {
+        db.get(checkDuplicateSql, [fromAddress, subject, bodyPreview], (err, row) => {
             if (err) {
-                console.error('❌ Error al insertar:', err.message);
-                reject(err);
-            } else {
-                resolve({ id: this.lastID, source });
+                console.error('❌ Error verificando duplicados:', err.message);
+                // Si falla la verificación, procedemos a insertar por si acaso
             }
+
+            if (row) {
+                console.log(`⚠️ Correo duplicado detectado (ID: ${row.id}). Ignorando.`);
+                // Resolvemos con null para indicar que no se insertó nada
+                resolve({ id: null, source, duplicate: true });
+                return;
+            }
+
+            // Si no es duplicado, insertar
+            const sql = `INSERT INTO emails (from_address, from_name, subject, body_preview, source, raw_data) VALUES (?, ?, ?, ?, ?, ?)`;
+            db.run(sql, [fromAddress, fromName, subject, bodyPreview, source, rawData], function (err) {
+                if (err) {
+                    console.error('❌ Error al insertar:', err.message);
+                    reject(err);
+                } else {
+                    resolve({ id: this.lastID, source, duplicate: false });
+                }
+            });
         });
     });
 }
