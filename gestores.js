@@ -51,7 +51,7 @@ const ADMIN_CONTACTS = [
     {
         nombre: 'Monitor Soporte',
         telefono: '523318213624',
-        email: null // Solo WhatsApp
+        email: 'arkelly147@gmail.com' // Recibirá WhatsApp y Email
     }
 ];
 
