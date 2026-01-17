@@ -1,5 +1,6 @@
 const https = require('https');
 const http = require('http');
+const { findGestorByName, getAdminContacts } = require('./gestores');
 
 // ============================================
 // CONFIGURACIÓN DE EVOLUTION API
@@ -19,6 +20,44 @@ const EASYBROKER_CONFIG = {
     apiKey: process.env.EASYBROKER_API_KEY || '6dt2onwsu5u3ex1qqh49rzck0wsyf4'
 };
 
+// ============================================
+// CONFIGURACIÓN DE N8N WEBHOOK PARA EMAIL
+// ============================================
+const N8N_EMAIL_WEBHOOK = process.env.N8N_EMAIL_WEBHOOK || 'https://evolutionapi-n8n.ckoomq.easypanel.host/webhook/get_payload_lugo';
+
+// ============================================
+// FUNCIÓN PARA OBTENER FECHA/HORA DE MÉXICO
+// ============================================
+function getMexicoDateTime() {
+    // Crear fecha en UTC
+    const now = new Date();
+
+    // Offset de México: UTC-6 (horario estándar)
+    // Nota: México usa UTC-5 durante horario de verano (abril-octubre aprox)
+    const month = now.getUTCMonth(); // 0-11
+    // Horario de verano aproximado: abril (3) a octubre (9)
+    const isDST = month >= 3 && month <= 9;
+    const offsetHours = isDST ? -5 : -6;
+
+    // Calcular hora de México
+    const mexicoTime = new Date(now.getTime() + (offsetHours * 60 * 60 * 1000));
+
+    // Formatear fecha: DD/MM/YYYY
+    const day = String(mexicoTime.getUTCDate()).padStart(2, '0');
+    const monthStr = String(mexicoTime.getUTCMonth() + 1).padStart(2, '0');
+    const year = mexicoTime.getUTCFullYear();
+    const dateStr = `${day}/${monthStr}/${year}`;
+
+    // Formatear hora: HH:MM a.m./p.m.
+    let hours = mexicoTime.getUTCHours();
+    const minutes = String(mexicoTime.getUTCMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // 0 -> 12
+    const timeStr = `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+
+    return { dateStr, timeStr };
+}
 // ============================================
 // EXTRAER CÓDIGO DE PROPIEDAD DEL ASUNTO
 // ============================================
@@ -135,6 +174,186 @@ async function sendWhatsAppMessage(message, destinationNumber) {
     });
 }
 
+// ============================================
+// ENVIAR DATOS A N8N PARA ENVÍO DE EMAIL
+// ============================================
+async function sendEmailViaN8N(emailPayload) {
+    return new Promise((resolve, reject) => {
+        const url = new URL(N8N_EMAIL_WEBHOOK);
+
+        const postData = JSON.stringify(emailPayload);
+
+        const options = {
+            hostname: url.hostname,
+            port: url.port || (url.protocol === 'https:' ? 443 : 80),
+            path: url.pathname,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData)
+            }
+        };
+
+        const protocol = url.protocol === 'https:' ? https : http;
+
+        console.log(`📧 Enviando datos a n8n para email: ${emailPayload.gestor.email}`);
+
+        const req = protocol.request(options, (res) => {
+            let data = '';
+
+            res.on('data', (chunk) => {
+                data += chunk;
+            });
+
+            res.on('end', () => {
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    console.log(`✅ Datos enviados a n8n para email a ${emailPayload.gestor.email}`);
+                    resolve({ success: true, response: data });
+                } else {
+                    console.error(`❌ Error en respuesta de n8n:`, res.statusCode, data);
+                    resolve({ success: false, error: data });
+                }
+            });
+        });
+
+        req.on('error', (error) => {
+            console.error(`❌ Error al enviar a n8n:`, error.message);
+            resolve({ success: false, error: error.message });
+        });
+
+        req.write(postData);
+        req.end();
+    });
+}
+
+// ============================================
+// FORMATEAR NOTIFICACIÓN DE EMAIL PARA GESTOR
+// ============================================
+function formatEmailNotificationForGestor(emailData, source, propertyUrl, propertyCode, linkInmobiliarioUrl, gestorName) {
+    const clientName = extractClientName(emailData);
+    const clientPhone = extractClientPhone(emailData);
+    const clientEmail = extractClientEmail(emailData);
+    const subject = emailData.subject || '(Sin asunto)';
+    const bodyPreview = emailData.bodyPreview || emailData.body?.content || '';
+
+    // Truncar body preview
+    const truncatedBody = bodyPreview.length > 300
+        ? bodyPreview.substring(0, 300) + '...'
+        : bodyPreview;
+
+    // Formatear fecha con zona horaria de México
+    const { dateStr, timeStr } = getMexicoDateTime();
+
+    const sourceNames = {
+        'inmuebles24': 'Inmuebles24',
+        'proppit': 'Proppit',
+        'easybroker': 'EasyBroker',
+        'vivanuncios': 'Vivanuncios',
+        'mercadolibre': 'MercadoLibre',
+        'personal': 'Personal',
+        'otros': 'Otros'
+    };
+
+    const sourceName = sourceNames[source] || source;
+
+    // HTML para email
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px 10px 0 0; }
+            .content { background: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
+            .field { margin-bottom: 15px; }
+            .label { font-weight: bold; color: #555; }
+            .value { color: #333; }
+            .link { color: #667eea; text-decoration: none; }
+            .footer { background: #f0f0f0; padding: 15px; border-radius: 0 0 10px 10px; text-align: center; font-size: 12px; color: #666; }
+            .property-links { background: #e8f4fd; padding: 15px; border-radius: 5px; margin-top: 15px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h2>📧 Nuevo Lead - ${sourceName}</h2>
+                <p>Asignado a: ${gestorName}</p>
+            </div>
+            <div class="content">
+                <div class="field">
+                    <span class="label">👤 Nombre Completo:</span>
+                    <span class="value">${clientName}</span>
+                </div>
+                <div class="field">
+                    <span class="label">📱 Teléfono:</span>
+                    <span class="value">${clientPhone}</span>
+                </div>
+                ${clientEmail ? `
+                <div class="field">
+                    <span class="label">📧 Email:</span>
+                    <span class="value"><a href="mailto:${clientEmail}" class="link">${clientEmail}</a></span>
+                </div>
+                ` : ''}
+                ${propertyCode ? `
+                <div class="property-links">
+                    <div class="field">
+                        <span class="label">🏷️ Código de Propiedad:</span>
+                        <span class="value">${propertyCode}</span>
+                    </div>
+                    ${propertyUrl ? `
+                    <div class="field">
+                        <span class="label">🔗 Link EasyBroker:</span>
+                        <a href="${propertyUrl}" class="link">${propertyUrl}</a>
+                    </div>
+                    ` : ''}
+                    ${linkInmobiliarioUrl ? `
+                    <div class="field">
+                        <span class="label">🏠 Link Inmobiliario:</span>
+                        <a href="${linkInmobiliarioUrl}" class="link">Ver en Link Inmobiliario</a>
+                    </div>
+                    ` : ''}
+                </div>
+                ` : ''}
+                <div class="field" style="margin-top: 20px;">
+                    <span class="label">📝 Asunto Original:</span>
+                    <p class="value">${subject}</p>
+                </div>
+                <div class="field">
+                    <span class="label">💬 Mensaje:</span>
+                    <p class="value">${truncatedBody}</p>
+                </div>
+            </div>
+            <div class="footer">
+                Recibido: ${dateStr} ${timeStr} | Link Inmobiliario GDL
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    // Texto plano
+    const textContent = `
+NUEVO LEAD - ${sourceName}
+Asignado a: ${gestorName}
+========================
+
+👤 Nombre Completo: ${clientName}
+📱 Teléfono: ${clientPhone}
+${clientEmail ? `📧 Email: ${clientEmail}\n` : ''}
+${propertyCode ? `🏷️ Código: ${propertyCode}\n` : ''}
+${propertyUrl ? `🔗 EasyBroker: ${propertyUrl}\n` : ''}
+${linkInmobiliarioUrl ? `🏠 Link Inmobiliario: ${linkInmobiliarioUrl}\n` : ''}
+
+📝 Asunto: ${subject}
+
+💬 Mensaje: ${truncatedBody}
+
+Recibido: ${dateStr} ${timeStr}
+    `;
+
+    return { htmlContent, textContent };
+}
 // ============================================
 // EXTRAER NOMBRE COMPLETO DEL CLIENTE (NOMBRE Y APELLIDOS)
 // ============================================
@@ -360,17 +579,8 @@ function formatEmailNotification(emailData, source, propertyUrl = null, property
     const emoji = sourceEmojis[source] || '📧';
     const sourceName = sourceNames[source] || source;
 
-    // Formatear fecha
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('es-MX', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-    });
-    const timeStr = now.toLocaleTimeString('es-MX', {
-        hour: '2-digit',
-        minute: '2-digit'
-    });
+    // Formatear fecha con zona horaria de México
+    const { dateStr, timeStr } = getMexicoDateTime();
 
     // Construir mensaje base
     let message = `📧 *NUEVO LEAD*
@@ -416,14 +626,23 @@ async function notifyNewEmail(emailData, source) {
         // Extraer código de propiedad del asunto
         const propertyCode = extractPropertyCode(subject);
         let propertyUrl = null;
+        let agentName = null;
+        let property = null;
 
         // Si encontramos un código, consultar EasyBroker API
         if (propertyCode) {
             console.log(`📋 Código de propiedad detectado: ${propertyCode}`);
-            const property = await getPropertyFromEasyBroker(propertyCode);
-            if (property && property.public_url) {
-                propertyUrl = property.public_url;
-                console.log(`🔗 URL de propiedad obtenida: ${propertyUrl}`);
+            property = await getPropertyFromEasyBroker(propertyCode);
+            if (property) {
+                if (property.public_url) {
+                    propertyUrl = property.public_url;
+                    console.log(`🔗 URL de propiedad obtenida: ${propertyUrl}`);
+                }
+                // Obtener nombre del agente
+                if (property.agent && property.agent.name) {
+                    agentName = property.agent.name;
+                    console.log(`👤 Agente de la propiedad: ${agentName}`);
+                }
             }
         }
 
@@ -434,30 +653,108 @@ async function notifyNewEmail(emailData, source) {
             console.log(`🏠 URL de Link Inmobiliario: ${linkInmobiliarioUrl}`);
         }
 
-        // Formatear mensaje con las URLs de la propiedad (si existen)
+        // SIEMPRE enviar a los administradores fijos
+        const admins = getAdminContacts();
+        const destinatarios = admins;
+        console.log(`📨 Enviando notificación a ${admins.length} destinatarios fijos`);
+        console.log('🚀 Iniciando proceso de notificaciones (WhatsApp -> N8N Email)');
+
+        // Formatear mensaje de WhatsApp
+        const gestorNameForMessage = 'Equipo Link Inmobiliario';
         const message = formatEmailNotification(emailData, source, propertyUrl, propertyCode, linkInmobiliarioUrl);
 
-        // Enviar a todos los números configurados
-        const sendPromises = EVOLUTION_CONFIG.destinationNumbers.map(number =>
-            sendWhatsAppMessage(message, number.trim())
-        );
+        // Agregar info del gestor asignado al mensaje
+        const messageWithGestor = message + `\n\n👔 *Asignado a:* ${gestorNameForMessage}`;
 
-        const results = await Promise.all(sendPromises);
+        // Enviar WhatsApp a todos los destinatarios
+        const whatsappResults = [];
+        for (const dest of destinatarios) {
+            const result = await sendWhatsAppMessage(messageWithGestor, dest.telefono);
+            whatsappResults.push({
+                destinatario: dest.nombre,
+                telefono: dest.telefono,
+                ...result
+            });
+        }
 
-        // Retornar éxito si al menos uno se envió correctamente
-        const atLeastOneSuccess = results.some(r => r.success);
+        // Enviar Email a todos los destinatarios que tengan email (vía n8n)
+        const emailResults = [];
+        const clientName = extractClientName(emailData);
+        const clientPhone = extractClientPhone(emailData);
+        const clientEmail = extractClientEmail(emailData);
+
+        // Formatear fecha con zona horaria de México
+        const { dateStr, timeStr } = getMexicoDateTime();
+
+        const sourceNames = {
+            'inmuebles24': 'Inmuebles24',
+            'proppit': 'Proppit',
+            'easybroker': 'EasyBroker',
+            'vivanuncios': 'Vivanuncios',
+            'mercadolibre': 'MercadoLibre',
+            'personal': 'Personal',
+            'otros': 'Otros'
+        };
+        const sourceName = sourceNames[source] || source;
+
+        for (const dest of destinatarios) {
+            console.log(`📧 Procesando envío de email para: ${dest.nombre} (Tiene email: ${!!dest.email})`);
+            if (dest.email) {
+                // Construir payload para n8n
+                const emailPayload = {
+                    gestor: {
+                        nombre: dest.nombre,
+                        telefono: dest.telefono,
+                        email: dest.email
+                    },
+                    lead: {
+                        nombreCliente: clientName,
+                        telefonoCliente: clientPhone,
+                        emailCliente: clientEmail || 'No proporcionado',
+                        origen: sourceName,
+                        asunto: emailData.subject || '(Sin asunto)',
+                        mensaje: (emailData.bodyPreview || '').substring(0, 500)
+                    },
+                    propiedad: {
+                        codigo: propertyCode || null,
+                        urlEasyBroker: propertyUrl || null,
+                        urlLinkInmobiliario: linkInmobiliarioUrl || null
+                    },
+                    fecha: `${dateStr} ${timeStr}`,
+                    emailSubject: `🏠 Nuevo Lead de ${sourceName}${propertyCode ? ` - ${propertyCode}` : ''}`
+                };
+
+                const result = await sendEmailViaN8N(emailPayload);
+                emailResults.push({
+                    destinatario: dest.nombre,
+                    email: dest.email,
+                    ...result
+                });
+            } else {
+                console.log(`⚠️ Saltando envío de email para ${dest.nombre} (no tiene email configurado)`);
+            }
+        }
+
+        // Retornar resultados
+        const atLeastOneWhatsAppSuccess = whatsappResults.some(r => r.success);
+        const atLeastOneEmailSuccess = emailResults.some(r => r.success);
+
         return {
-            success: atLeastOneSuccess,
-            results
+            success: atLeastOneWhatsAppSuccess || atLeastOneEmailSuccess,
+            gestorAsignado: 'Administración',
+            agenteEasyBroker: agentName,
+            whatsappResults,
+            emailResults
         };
     } catch (error) {
-        console.error('❌ Error al notificar por WhatsApp:', error);
+        console.error('❌ Error al notificar:', error);
         return { success: false, error: error.message };
     }
 }
 
 module.exports = {
     sendWhatsAppMessage,
+    sendEmailViaN8N,
     formatEmailNotification,
     notifyNewEmail,
     extractPropertyCode,
@@ -465,6 +762,8 @@ module.exports = {
     extractClientName,
     extractClientPhone,
     extractClientEmail,
+    findGestorByName,
     EVOLUTION_CONFIG,
-    EASYBROKER_CONFIG
+    EASYBROKER_CONFIG,
+    N8N_EMAIL_WEBHOOK
 };
