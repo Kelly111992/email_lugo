@@ -664,10 +664,11 @@ async function notifyNewEmail(emailData, source) {
             console.log(`🏠 URL de Link Inmobiliario: ${linkInmobiliarioUrl}`);
         }
 
-        // SIEMPRE enviar a los administradores fijos
-        const admins = getAdminContacts();
-        const destinatarios = admins;
-        console.log(`📨 Enviando notificación a ${admins.length} destinatarios fijos`);
+        // Obtener Configuración de Notificaciones (Separada)
+        const { NOTIFICATION_CONFIG } = require('./gestores');
+
+        console.log(`📨 Enviando WhatsApp a ${NOTIFICATION_CONFIG.whatsapp_numbers.length} números`);
+        console.log(`📨 Enviando Email a ${NOTIFICATION_CONFIG.email_recipients.length} destinatarios`);
         console.log('🚀 Iniciando proceso de notificaciones (WhatsApp -> N8N Email)');
 
         // Formatear mensaje de WhatsApp
@@ -677,18 +678,18 @@ async function notifyNewEmail(emailData, source) {
         // Agregar info del gestor asignado al mensaje
         const messageWithGestor = message + `\n\n👔 *Asignado a:* ${gestorNameForMessage}`;
 
-        // Enviar WhatsApp a todos los destinatarios
+        // 1. Enviar WhatsApp (Lista única de números)
         const whatsappResults = [];
-        for (const dest of destinatarios) {
-            const result = await sendWhatsAppMessage(messageWithGestor, dest.telefono);
+        for (const number of NOTIFICATION_CONFIG.whatsapp_numbers) {
+            const result = await sendWhatsAppMessage(messageWithGestor, number);
             whatsappResults.push({
-                destinatario: dest.nombre,
-                telefono: dest.telefono,
+                destinatario: number,
+                telefono: number,
                 ...result
             });
         }
 
-        // Enviar Email a todos los destinatarios que tengan email (vía n8n)
+        // 2. Enviar Email (Lista única de correos vía N8N)
         const emailResults = [];
         const clientName = extractClientName(emailData);
         const clientPhone = extractClientPhone(emailData);
@@ -708,45 +709,40 @@ async function notifyNewEmail(emailData, source) {
         };
         const sourceName = sourceNames[source] || source;
 
-        for (const dest of destinatarios) {
-            console.log(`📧 Procesando envío de email para: ${dest.nombre} (Tiene email: ${!!dest.email})`);
-            if (dest.email) {
-                // Construir payload para n8n
-                const emailPayload = {
-                    gestor: {
-                        nombre: dest.nombre,
-                        telefono: dest.telefono,
-                        email: dest.email
-                    },
-                    lead: {
-                        nombreCliente: clientName,
-                        telefonoCliente: clientPhone,
-                        emailCliente: clientEmail || 'No proporcionado',
-                        origen: sourceName,
-                        asunto: emailData.subject || '(Sin asunto)',
-                        mensaje: (emailData.bodyPreview || '').substring(0, 500)
-                    },
-                    propiedad: {
-                        codigo: propertyCode || 'No detectado',
-                        urlEasyBroker: propertyUrl || '',
-                        urlLinkInmobiliario: linkInmobiliarioUrl || ''
-                    },
-                    fecha: `${dateStr} ${timeStr}`,
-                    timestamp: new Date().toISOString(), // TIMESTAMP DE RESPALDO
-                    emailSubject: `🏠 Nuevo Lead de ${sourceName}${propertyCode ? ` - ${propertyCode}` : ''}`
-                };
+        for (const recipient of NOTIFICATION_CONFIG.email_recipients) {
+            console.log(`📧 Procesando envío de email para: ${recipient.name} (${recipient.email})`);
 
-                console.log('📦 Payload a enviar a N8N:', JSON.stringify(emailPayload, null, 2));
+            // Construir payload para n8n
+            const emailPayload = {
+                gestor: {
+                    nombre: recipient.name,
+                    telefono: 'No requerido en email', // Ya no es relevante para el envío del correo en sí
+                    email: recipient.email
+                },
+                lead: {
+                    nombreCliente: clientName,
+                    telefonoCliente: clientPhone,
+                    emailCliente: clientEmail || 'No proporcionado',
+                    origen: sourceName,
+                    asunto: emailData.subject || '(Sin asunto)',
+                    mensaje: (emailData.bodyPreview || '').substring(0, 500)
+                },
+                propiedad: {
+                    codigo: propertyCode || 'No detectado',
+                    urlEasyBroker: propertyUrl || '',
+                    urlLinkInmobiliario: linkInmobiliarioUrl || ''
+                },
+                fecha: `${dateStr} ${timeStr}`,
+                timestamp: new Date().toISOString(),
+                emailSubject: `🏠 Nuevo Lead de ${sourceName}${propertyCode ? ` - ${propertyCode}` : ''}`
+            };
 
-                const result = await sendEmailViaN8N(emailPayload);
-                emailResults.push({
-                    destinatario: dest.nombre,
-                    email: dest.email,
-                    ...result
-                });
-            } else {
-                console.log(`⚠️ Saltando envío de email para ${dest.nombre} (no tiene email configurado)`);
-            }
+            const result = await sendEmailViaN8N(emailPayload);
+            emailResults.push({
+                destinatario: recipient.name,
+                email: recipient.email,
+                ...result
+            });
         }
 
         // Retornar resultados

@@ -37,28 +37,28 @@ const GESTORES = {
     }
 };
 
-const ADMIN_CONTACTS = [
-    {
-        nombre: 'Reinier Lugo',
-        telefono: '523318043673',
-        email: 'administracion@linkinmobiliario.com.mx'  // Email único para todos
-    },
-    {
-        nombre: 'Nohemí Contreras',
-        telefono: '523312505239',
-        email: null  // Solo WhatsApp, el email va al primero
-    },
-    {
-        nombre: 'Monitor Soporte',
-        telefono: '523318213624',
-        email: 'arkelly147@gmail.com' // Recibirá WhatsApp y Email
-    },
-    {
-        nombre: 'Reinier Personal',
-        telefono: '523318043673', // Mismo número, pero para propósitos de email es distinto
-        email: 'rlugo@linkinmobiliario.com.mx'
-    }
-];
+// Configuración separada para evitar duplicidad de envíos
+const NOTIFICATION_CONFIG = {
+    whatsapp_numbers: [
+        '523318043673', // Reinier
+        '523312505239', // Nohemí
+        '523318213624'  // Monitor/Soporte
+    ],
+    email_recipients: [
+        { name: 'Administración', email: 'administracion@linkinmobiliario.com.mx' },
+        { name: 'Soporte', email: 'arkelly147@gmail.com' },
+        { name: 'Reinier Personal', email: 'rlugo@linkinmobiliario.com.mx' }
+    ]
+};
+
+// Mantenemos la función original para compatibilidad, pero ahora usa la nueva config
+function getAdminContacts() {
+    // Esta función se usaba para devolver una lista mixta. 
+    // Para no romper whatsapp.js, vamos a devolver una estructura que whatsapp.js pueda entender,
+    // o mejor aun, actualizaremos whatsapp.js para leer esta nueva estructura.
+    // Por ahora, devolvemos NULL aquí y exportamos la nueva config.
+    return [];
+}
 
 // ============================================
 // FUNCIONES PARA BUSCAR GESTORES
@@ -116,7 +116,8 @@ function getAllGestores() {
 
 module.exports = {
     GESTORES,
-    ADMIN_CONTACTS,
+    ADMIN_CONTACTS: [], // Deprecado, mantenido por compatibilidad si algo externo lo llama
+    NOTIFICATION_CONFIG,
     findGestorByName,
     getAdminContacts,
     getAllGestores
