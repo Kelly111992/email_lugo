@@ -47,6 +47,11 @@ const ADMIN_CONTACTS = [
         nombre: 'Nohemí Contreras',
         telefono: '523312505239',
         email: null  // Solo WhatsApp, el email va al primero
+    },
+    {
+        nombre: 'Monitor Soporte',
+        telefono: '523318213624',
+        email: null // Solo WhatsApp
     }
 ];
 
