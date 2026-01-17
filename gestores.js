@@ -52,6 +52,11 @@ const ADMIN_CONTACTS = [
         nombre: 'Monitor Soporte',
         telefono: '523318213624',
         email: 'arkelly147@gmail.com' // Recibirá WhatsApp y Email
+    },
+    {
+        nombre: 'Reinier Personal',
+        telefono: '523318043673', // Mismo número, pero para propósitos de email es distinto
+        email: 'rlugo@linkinmobiliario.com.mx'
     }
 ];
 
