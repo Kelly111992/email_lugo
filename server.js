@@ -22,6 +22,23 @@ app.post('/api/emails', async (req, res) => {
         console.log('📧 Correo recibido:', JSON.stringify(req.body, null, 2));
 
         const emailData = req.body;
+        const subject = emailData.subject || '';
+
+        // PROTECCIÓN CONTRA BUCLES (Anti-Loop)
+        // Si el asunto comienza con nuestro propio patrón de notificación, lo ignoramos.
+        // También ignoramos correos de 'Mailer Daemon' o rebotes comunes.
+        if (subject.includes('🏠 Nuevo Lead') ||
+            subject.includes('Delivery Status Notification') ||
+            emailData.from?.address?.includes('mailer-daemon')) {
+
+            console.log('🛑 Ignorando correo del sistema/rebote para evitar bucles.');
+            return res.json({
+                success: true,
+                message: 'Correo del sistema ignorado (Anti-Loop)',
+                ignored: true
+            });
+        }
+
         const result = await database.insertEmail(emailData);
 
         if (result.duplicate) {
