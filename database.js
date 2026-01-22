@@ -42,9 +42,7 @@ function initDatabase() {
 function classifyEmail(fromAddress) {
     const address = fromAddress.toLowerCase();
 
-    if (address.includes('arkelly147@gmail.com')) {
-        return 'personal';
-    } else if (address.includes('usuarios.inmuebles24.com')) {
+    if (address.includes('usuarios.inmuebles24.com')) {
         return 'inmuebles24';
     } else if (address.includes('solicitudes@proppit.com') || address.includes('@proppit.com')) {
         return 'proppit';
@@ -190,7 +188,7 @@ async function getTrends(days = 30) {
                 reject(err);
             } else {
                 // Organizar los datos por fecha y fuente
-                const sources = ['inmuebles24', 'proppit', 'easybroker', 'vivanuncios', 'mercadolibre', 'personal', 'otros'];
+                const sources = ['inmuebles24', 'proppit', 'easybroker', 'vivanuncios', 'mercadolibre', 'otros'];
                 const dateMap = {};
 
                 // Generar todas las fechas en el rango

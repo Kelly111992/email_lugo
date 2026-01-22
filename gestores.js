@@ -41,12 +41,10 @@ const GESTORES = {
 const NOTIFICATION_CONFIG = {
     whatsapp_numbers: [
         '523318043673', // Reinier
-        '523312505239', // Nohemí
-        '523318213624'  // Monitor/Soporte
+        '523312505239'  // Nohemí
     ],
     email_recipients: [
         { name: 'Administración', email: 'administracion@linkinmobiliario.com.mx' },
-        { name: 'Soporte', email: 'arkelly147@gmail.com' },
         { name: 'Reinier Personal', email: 'rlugo@linkinmobiliario.com.mx' }
     ]
 };
