@@ -19,6 +19,10 @@ const INACTIVITY_THRESHOLD_MS = 4 * 60 * 60 * 1000;
 // Hora del resumen diario (8:00 PM hora México)
 const DAILY_SUMMARY_HOUR = 20; // 20:00 = 8:00 PM
 
+// Hora del reinicio automático preventivo (11:30 PM hora México)
+const AUTO_RESTART_HOUR = 23;
+const AUTO_RESTART_MINUTE = 30;
+
 // Estado
 let lastLeadTime = new Date();
 let inactivityAlertSent = false;
@@ -264,6 +268,132 @@ function registerNewLead() {
 }
 
 // ============================================
+// REINICIO AUTOMÁTICO PREVENTIVO DE EVOLUTION API
+// ============================================
+async function performScheduledRestart() {
+    console.log('🔄 Ejecutando reinicio automático preventivo...');
+
+    const timeStr = new Date().toLocaleString('es-MX', {
+        timeZone: 'America/Mexico_City',
+        dateStyle: 'short',
+        timeStyle: 'short'
+    });
+
+    try {
+        // 1. Enviar aviso de que se va a reiniciar
+        await sendWhatsApp(`🔄 *Reinicio Preventivo*
+━━━━━━━━━━━━━━━━━━━━━━━
+
+⏰ ${timeStr}
+
+Ejecutando reinicio automático nocturno de Evolution API para mantener la conexión estable.
+
+_Espera unos segundos..._`);
+
+        // 2. Esperar 2 segundos
+        await new Promise(r => setTimeout(r, 2000));
+
+        // 3. Reiniciar la instancia
+        const restartResult = await restartEvolutionInstance();
+
+        // 4. Esperar 10 segundos para que se estabilice
+        await new Promise(r => setTimeout(r, 10000));
+
+        // 5. Verificar estado
+        const statusResult = await checkEvolutionStatus();
+
+        // 6. Enviar resultado
+        if (statusResult.success && statusResult.state === 'open') {
+            await sendWhatsApp(`✅ *Reinicio Completado*
+━━━━━━━━━━━━━━━━━━━━━━━
+
+🟢 Estado: *Conectado*
+⏰ ${timeStr}
+
+El sistema está listo para recibir leads mañana.
+
+_¡Buenas noches!_ 🌙`);
+            console.log('✅ Reinicio automático exitoso');
+        } else {
+            await sendWhatsApp(`⚠️ *Reinicio con Problemas*
+━━━━━━━━━━━━━━━━━━━━━━━
+
+🟡 Estado: *${statusResult.state || 'Desconocido'}*
+⏰ ${timeStr}
+
+El reinicio se ejecutó pero la conexión no está confirmada. Por favor revisa mañana temprano.
+
+_Verifica en: evolutionapi-evolution-api.ckoomq.easypanel.host/manager_`);
+            console.log('⚠️ Reinicio completado pero estado incierto');
+        }
+
+        return { success: true, state: statusResult.state };
+    } catch (error) {
+        console.error('❌ Error en reinicio automático:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Función auxiliar para reiniciar instancia
+function restartEvolutionInstance() {
+    return new Promise((resolve) => {
+        const url = new URL(`${EVOLUTION_CONFIG.baseUrl}/instance/restart/${EVOLUTION_CONFIG.instanceName}`);
+
+        const req = https.request({
+            hostname: url.hostname,
+            port: 443,
+            path: url.pathname,
+            method: 'PUT',
+            headers: {
+                'apikey': EVOLUTION_CONFIG.apiKey
+            },
+            timeout: 30000
+        }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                resolve({ success: res.statusCode >= 200 && res.statusCode < 300 });
+            });
+        });
+
+        req.on('error', (e) => resolve({ success: false, error: e.message }));
+        req.end();
+    });
+}
+
+// Función auxiliar para verificar estado
+function checkEvolutionStatus() {
+    return new Promise((resolve) => {
+        const url = new URL(`${EVOLUTION_CONFIG.baseUrl}/instance/connectionState/${EVOLUTION_CONFIG.instanceName}`);
+
+        const req = https.request({
+            hostname: url.hostname,
+            port: 443,
+            path: url.pathname,
+            method: 'GET',
+            headers: {
+                'apikey': EVOLUTION_CONFIG.apiKey
+            },
+            timeout: 10000
+        }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const result = JSON.parse(data);
+                    resolve({ success: true, state: result.instance?.state || 'unknown' });
+                } catch (e) {
+                    resolve({ success: false, state: 'error' });
+                }
+            });
+        });
+
+        req.on('error', () => resolve({ success: false, state: 'error' }));
+        req.end();
+    });
+}
+
+// ============================================
 // PROGRAMAR TAREAS
 // ============================================
 function startScheduler() {
@@ -274,18 +404,32 @@ function startScheduler() {
         checkInactivity();
     }, 30 * 60 * 1000);
 
-    // Verificar si es hora del resumen diario cada minuto
+    // Verificar cada minuto si es hora de ejecutar tareas programadas
+    let lastSummaryDay = -1;
+    let lastRestartDay = -1;
+
     setInterval(() => {
         const now = new Date();
         const mexicoTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
+        const currentDay = mexicoTime.getDate();
+        const currentHour = mexicoTime.getHours();
+        const currentMinute = mexicoTime.getMinutes();
 
-        // Enviar resumen a las 8:00 PM (20:00) y 0 minutos
-        if (mexicoTime.getHours() === DAILY_SUMMARY_HOUR && mexicoTime.getMinutes() === 0) {
+        // Enviar resumen a las 8:00 PM (20:00)
+        if (currentHour === DAILY_SUMMARY_HOUR && currentMinute === 0 && lastSummaryDay !== currentDay) {
             sendDailySummary();
+            lastSummaryDay = currentDay;
+        }
+
+        // Reinicio automático a las 11:30 PM (23:30)
+        if (currentHour === AUTO_RESTART_HOUR && currentMinute === AUTO_RESTART_MINUTE && lastRestartDay !== currentDay) {
+            performScheduledRestart();
+            lastRestartDay = currentDay;
         }
     }, 60 * 1000);
 
     console.log(`   📊 Resumen diario: ${DAILY_SUMMARY_HOUR}:00 hrs (México)`);
+    console.log(`   🔄 Reinicio automático: ${AUTO_RESTART_HOUR}:${AUTO_RESTART_MINUTE} hrs (México)`);
     console.log(`   ⚠️ Alerta inactividad: después de ${INACTIVITY_THRESHOLD_MS / 1000 / 60 / 60} horas sin leads`);
 }
 
@@ -299,6 +443,9 @@ module.exports = {
     startScheduler,
     getTodayStats,
     sendWhatsApp,
+    performScheduledRestart,     // Reinicio manual/programado
+    restartEvolutionInstance,    // Solo reiniciar
+    checkEvolutionStatus,        // Solo verificar estado
     getLastLeadTime: () => lastLeadTime,
     isInactivityAlertSent: () => inactivityAlertSent
 };
