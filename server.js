@@ -4,6 +4,7 @@ const path = require('path');
 const database = require('./database');
 const whatsapp = require('./whatsapp');
 const evolutionMonitor = require('./evolution-monitor');
+const leadNotifications = require('./lead-notifications');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -59,6 +60,9 @@ app.post('/api/emails', async (req, res) => {
         }
 
         console.log(`✅ Correo guardado - ID: ${result.id}, Clasificado como: ${result.source}`);
+
+        // Registrar lead para el sistema de alertas de inactividad
+        leadNotifications.registerNewLead();
 
         // Enviar notificación a WhatsApp
         console.log('📱 Enviando notificación a WhatsApp...');
@@ -263,6 +267,12 @@ async function startServer() {
             }, MONITOR_INTERVAL_MS);
 
             console.log(`⏰ Verificación automática cada ${MONITOR_INTERVAL_MS / 1000 / 60} minutos`);
+
+            // ============================================
+            // INICIAR NOTIFICACIONES DE LEADS
+            // ============================================
+            leadNotifications.startScheduler();
+            console.log('📊 Sistema de resumen diario y alertas de inactividad activado');
         });
     } catch (error) {
         console.error('❌ Error al iniciar servidor:', error);
