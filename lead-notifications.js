@@ -16,8 +16,8 @@ const ALERT_NUMBER = '523318043673';
 // Tiempo sin leads para alertar (4 horas en ms)
 const INACTIVITY_THRESHOLD_MS = 4 * 60 * 60 * 1000;
 
-// Hora del resumen diario (8:00 PM hora México)
-const DAILY_SUMMARY_HOUR = 20; // 20:00 = 8:00 PM
+// Hora del resumen diario (12:00 AM / medianoche hora México)
+const DAILY_SUMMARY_HOUR = 0; // 0:00 = 12:00 AM
 
 // Hora del reinicio automático preventivo (2:00 AM hora México)
 const AUTO_RESTART_HOUR = 2;
