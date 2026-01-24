@@ -3,9 +3,13 @@ const cors = require('cors');
 const path = require('path');
 const database = require('./database');
 const whatsapp = require('./whatsapp');
+const evolutionMonitor = require('./evolution-monitor');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+
+// Intervalo de monitoreo (5 minutos)
+const MONITOR_INTERVAL_MS = 5 * 60 * 1000;
 
 // Middleware
 app.use(cors());
@@ -127,6 +131,68 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// ============================================
+// EVOLUTION API MONITOR ENDPOINTS
+// ============================================
+
+// Verificar estado de Evolution API
+app.get('/api/evolution-status', async (req, res) => {
+    try {
+        const sendTest = req.query.test === 'true';
+        const result = await evolutionMonitor.runHealthCheck(sendTest);
+        const status = evolutionMonitor.getMonitorStatus();
+
+        res.json({
+            ...result,
+            monitorStatus: status,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('❌ Error al verificar Evolution API:', error);
+        res.status(500).json({ error: error.message, healthy: false });
+    }
+});
+
+// Forzar alerta de prueba
+app.post('/api/evolution-status/test-alert', async (req, res) => {
+    try {
+        console.log('📧 Enviando alerta de prueba...');
+        const result = await evolutionMonitor.sendEmailAlert('TEST_ALERT', {
+            message: 'Esta es una alerta de prueba del sistema de monitoreo',
+            requestedBy: 'Manual test via API'
+        });
+
+        res.json({
+            success: result.success,
+            message: result.success ? 'Alerta de prueba enviada' : 'Error al enviar alerta'
+        });
+    } catch (error) {
+        console.error('❌ Error al enviar alerta de prueba:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Forzar reinicio de instancia
+app.post('/api/evolution-status/restart', async (req, res) => {
+    try {
+        console.log('🔄 Forzando reinicio de instancia...');
+        const result = await evolutionMonitor.attemptRestart();
+
+        // Esperar 5 segundos y verificar
+        await new Promise(r => setTimeout(r, 5000));
+        const checkResult = await evolutionMonitor.runHealthCheck(false);
+
+        res.json({
+            restartSuccess: result.success,
+            currentStatus: checkResult,
+            message: checkResult.healthy ? 'Reinicio exitoso, conexión restaurada' : 'Reinicio completado pero conexión no disponible'
+        });
+    } catch (error) {
+        console.error('❌ Error al reiniciar:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Obtener tendencias para el gráfico
 app.get('/api/trends', async (req, res) => {
     try {
@@ -153,7 +219,7 @@ async function startServer() {
         // Initialize database first
         await database.initDatabase();
 
-        app.listen(PORT, '0.0.0.0', () => {
+        app.listen(PORT, '0.0.0.0', async () => {
             console.log(`
 ╔════════════════════════════════════════════════════════╗
 ║                                                        ║
@@ -162,11 +228,41 @@ async function startServer() {
 ║                                                        ║
 ║   🌐 Dashboard: http://localhost:${PORT}                 ║
 ║   📨 Webhook:   http://localhost:${PORT}/api/emails      ║
+║   🔍 Monitor:   http://localhost:${PORT}/api/evolution-status
 ║                                                        ║
 ║   Esperando correos de n8n...                          ║
 ║                                                        ║
 ╚════════════════════════════════════════════════════════╝
             `);
+
+            // ============================================
+            // INICIAR MONITOREO DE EVOLUTION API
+            // ============================================
+            console.log('🔍 Iniciando monitoreo de Evolution API...');
+
+            // Verificación inicial
+            const initialCheck = await evolutionMonitor.runHealthCheck(false);
+            if (initialCheck.healthy) {
+                console.log('✅ Evolution API está funcionando correctamente');
+            } else {
+                console.log('⚠️ Evolution API tiene problemas - Se enviará alerta');
+            }
+
+            // Programar verificaciones automáticas cada 5 minutos
+            let checkCount = 0;
+            setInterval(async () => {
+                checkCount++;
+                // Enviar mensaje de prueba cada 30 min (6 checks)
+                const shouldSendTest = checkCount % 6 === 0;
+
+                try {
+                    await evolutionMonitor.runHealthCheck(shouldSendTest);
+                } catch (error) {
+                    console.error('❌ Error en verificación automática:', error.message);
+                }
+            }, MONITOR_INTERVAL_MS);
+
+            console.log(`⏰ Verificación automática cada ${MONITOR_INTERVAL_MS / 1000 / 60} minutos`);
         });
     } catch (error) {
         console.error('❌ Error al iniciar servidor:', error);
@@ -175,3 +271,4 @@ async function startServer() {
 }
 
 startServer();
+

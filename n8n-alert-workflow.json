@@ -1,0 +1,49 @@
+{
+    "name": "Evolution API Alert Handler",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "evolution_alert",
+                "options": {}
+            },
+            "id": "webhook-alert",
+            "name": "Webhook - Recibir Alerta",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                200,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "fromEmail": "alertas@linkinmobiliario.com.mx",
+                "toEmail": "rlugo@linkinmobiliario.com.mx,arkelly147@gmail.com",
+                "subject": "🚨 ALERTA: Evolution API Desconectada - Acción Requerida",
+                "html": "=<!DOCTYPE html>\n<html>\n<head>\n    <style>\n        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }\n        .container { max-width: 600px; margin: 0 auto; padding: 20px; }\n        .header { background: #dc3545; color: white; padding: 20px; border-radius: 10px 10px 0 0; }\n        .content { background: #f9f9f9; padding: 20px; border: 1px solid #ddd; }\n        .alert-box { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin: 15px 0; }\n        .instructions { background: #e7f3ff; padding: 15px; border-radius: 5px; margin: 15px 0; }\n        .instruction-item { margin: 10px 0; padding: 10px; background: white; border-left: 3px solid #0d6efd; }\n        .footer { background: #f0f0f0; padding: 15px; border-radius: 0 0 10px 10px; text-align: center; font-size: 12px; color: #666; }\n        .button { display: inline-block; background: #0d6efd; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"header\">\n            <h2>🚨 ALERTA: Evolution API Desconectada</h2>\n            <p>Los leads de WhatsApp NO se están enviando</p>\n        </div>\n        <div class=\"content\">\n            <div class=\"alert-box\">\n                <strong>⚠️ {{ $json.details.message }}</strong>\n                <p>Tipo de error: {{ $json.type }}</p>\n                <p>Intentos fallidos: {{ $json.failedAttempts }}</p>\n                <p>Hora del problema: {{ $json.timestampMexico }}</p>\n            </div>\n            \n            <h3>📋 Instrucciones para solucionar:</h3>\n            <div class=\"instructions\">\n                <div class=\"instruction-item\">1. Ir al panel de Evolution API</div>\n                <div class=\"instruction-item\">2. Ingresar con la API Key</div>\n                <div class=\"instruction-item\">3. Hacer clic en la instancia \"lugo_email\"</div>\n                <div class=\"instruction-item\">4. Hacer clic en el botón \"RESTART\"</div>\n                <div class=\"instruction-item\">5. Esperar 30 segundos</div>\n                <div class=\"instruction-item\">6. Verificar que diga \"Connected\"</div>\n            </div>\n            \n            <p style=\"text-align: center;\">\n                <a href=\"https://evolutionapi-evolution-api.ckoomq.easypanel.host/manager\" class=\"button\">Abrir Panel de Evolution API</a>\n            </p>\n        </div>\n        <div class=\"footer\">\n            Link Inmobiliario GDL - Sistema de Monitoreo Automático\n        </div>\n    </div>\n</body>\n</html>"
+            },
+            "id": "send-email-alert",
+            "name": "Enviar Email de Alerta",
+            "type": "n8n-nodes-base.emailSend",
+            "typeVersion": 1,
+            "position": [
+                450,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook - Recibir Alerta": {
+            "main": [
+                [
+                    {
+                        "node": "Enviar Email de Alerta",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}
