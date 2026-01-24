@@ -1,7 +1,7 @@
 const https = require('https');
 
 // ============================================
-// CONFIGURACIÓN
+// CONFIGURACIÓN PRINCIPAL (lugo_email)
 // ============================================
 const EVOLUTION_CONFIG = {
     baseUrl: process.env.EVOLUTION_API_URL || 'https://evolutionapi-evolution-api.ckoomq.easypanel.host',
@@ -9,11 +9,21 @@ const EVOLUTION_CONFIG = {
     apiKey: process.env.EVOLUTION_API_KEY || '429683C4C977415CAAFCCE10F7D57E11'
 };
 
-// Número de admin para alertas de WhatsApp (cuando funcione)
-const ADMIN_NUMBER = '523318043673';
+// ============================================
+// CONFIGURACIÓN DE RESPALDO (claveai)
+// Usada para enviar alertas cuando lugo_email falla
+// ============================================
+const BACKUP_EVOLUTION_CONFIG = {
+    baseUrl: 'https://evolutionapi-evolution-api.ckoomq.easypanel.host',
+    instanceName: 'claveai',
+    apiKey: '429683C4C977415CAAFCCE10F7D57E11' // Misma API key del servidor
+};
 
-// Webhook de n8n para enviar alertas por email cuando WhatsApp falle
-const N8N_ALERT_WEBHOOK = process.env.N8N_ALERT_WEBHOOK || 'https://evolutionapi-n8n.ckoomq.easypanel.host/webhook/evolution_alert';
+// Número de Reinier para recibir alertas
+const ALERT_NUMBER = '523318043673';
+
+// Número de admin para mensajes de prueba
+const ADMIN_NUMBER = '523318043673';
 
 // Intervalo de verificación (5 minutos)
 const CHECK_INTERVAL_MS = 5 * 60 * 1000;
@@ -120,64 +130,101 @@ function sendTestMessage() {
 }
 
 /**
- * Enviar alerta por email (vía n8n) cuando WhatsApp falla
+ * Enviar alerta por WhatsApp usando la instancia de RESPALDO (claveai)
+ * Esta función se usa cuando la instancia principal (lugo_email) falla
  */
-function sendEmailAlert(alertType, details) {
+function sendWhatsAppAlert(alertType, details) {
     return new Promise((resolve) => {
-        const url = new URL(N8N_ALERT_WEBHOOK);
+        const url = new URL(`${BACKUP_EVOLUTION_CONFIG.baseUrl}/message/sendText/${BACKUP_EVOLUTION_CONFIG.instanceName}`);
 
-        const alertData = {
-            type: alertType,
-            timestamp: new Date().toISOString(),
-            timestampMexico: new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' }),
-            details: details,
-            instance: EVOLUTION_CONFIG.instanceName,
-            failedAttempts: failedAttempts,
-            lastSuccessfulCheck: lastSuccessfulCheck,
-            actionRequired: '⚠️ ACCIÓN REQUERIDA: Reiniciar la instancia de Evolution API',
-            instructions: [
-                '1. Ir a https://evolutionapi-evolution-api.ckoomq.easypanel.host/manager',
-                '2. Ingresar con API Key: 429683C4C977415CAAFCCE10F7D57E11',
-                '3. Hacer clic en la instancia "lugo_email"',
-                '4. Hacer clic en el botón "RESTART"',
-                '5. Esperar 30 segundos y verificar que diga "Connected"'
-            ]
-        };
+        // Formatear fecha México
+        const timestampMexico = new Date().toLocaleString('es-MX', {
+            timeZone: 'America/Mexico_City',
+            dateStyle: 'short',
+            timeStyle: 'short'
+        });
 
-        const postData = JSON.stringify(alertData);
+        // Mensaje de alerta formateado para WhatsApp
+        const alertMessage = `🚨 *ALERTA: Evolution API*
+━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ *${alertType === 'CONNECTION_FAILED' ? 'Conexión Perdida' :
+                alertType === 'SEND_FAILED' ? 'Fallo al Enviar' :
+                    alertType === 'TEST_ALERT' ? 'Prueba de Alerta' : alertType}*
+
+📝 *Detalle:* ${details.message || 'Error detectado'}
+🕐 *Hora:* ${timestampMexico}
+🔢 *Intentos fallidos:* ${failedAttempts}
+
+━━━━━━━━━━━━━━━━━━━━━━━
+*⚡ ACCIÓN REQUERIDA:*
+
+1️⃣ Ir a Evolution API Manager:
+   https://evolutionapi-evolution-api.ckoomq.easypanel.host/manager
+
+2️⃣ Ingresar con API Key
+
+3️⃣ Clic en instancia *"lugo_email"*
+
+4️⃣ Clic en botón *"RESTART"*
+
+5️⃣ Esperar 30 seg y verificar *"Connected"*
+━━━━━━━━━━━━━━━━━━━━━━━
+
+_Los leads NO se están enviando por WhatsApp mientras esto no se arregle._`;
+
+        const postData = JSON.stringify({
+            number: ALERT_NUMBER,
+            text: alertMessage
+        });
 
         const options = {
             hostname: url.hostname,
-            port: url.port || 443,
+            port: 443,
             path: url.pathname,
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'apikey': BACKUP_EVOLUTION_CONFIG.apiKey,
                 'Content-Length': Buffer.byteLength(postData)
             },
-            timeout: 10000
+            timeout: 15000
         };
 
-        const protocol = url.protocol === 'https:' ? https : require('http');
+        console.log(`📱 Enviando alerta por WhatsApp (via CLAVE.AI) a ${ALERT_NUMBER}...`);
 
-        const req = protocol.request(options, (res) => {
+        const req = https.request(options, (res) => {
             let data = '';
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
-                console.log(`📧 Alerta por email enviada: ${res.statusCode}`);
-                resolve({ success: res.statusCode >= 200 && res.statusCode < 300 });
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    console.log(`✅ Alerta WhatsApp enviada exitosamente`);
+                    resolve({ success: true });
+                } else {
+                    console.error(`❌ Error enviando alerta: ${res.statusCode} - ${data}`);
+                    resolve({ success: false, error: data });
+                }
             });
         });
 
         req.on('error', (e) => {
-            console.error('❌ Error enviando alerta por email:', e.message);
+            console.error('❌ Error de red enviando alerta:', e.message);
             resolve({ success: false, error: e.message });
+        });
+
+        req.on('timeout', () => {
+            req.destroy();
+            console.error('❌ Timeout enviando alerta');
+            resolve({ success: false, error: 'Timeout' });
         });
 
         req.write(postData);
         req.end();
     });
 }
+
+// Mantener alias para compatibilidad
+const sendEmailAlert = sendWhatsAppAlert;
 
 /**
  * Intentar reiniciar la instancia automáticamente
@@ -316,7 +363,8 @@ module.exports = {
     runHealthCheck,
     checkConnectionState,
     sendTestMessage,
-    sendEmailAlert,
+    sendEmailAlert,        // Alias de sendWhatsAppAlert (compatibilidad)
+    sendWhatsAppAlert,     // Función real de alerta vía CLAVE.AI
     attemptRestart,
     getMonitorStatus: () => ({
         lastStatus,
