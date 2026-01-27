@@ -1,0 +1,6 @@
+{
+  "summary": {},
+  "whatsappStatus": null,
+  "timestamp": "2026-01-27T14:32:16.071Z",
+  "error": "API did not return an array: {\"error\":\"SQLITE_FULL: database or disk is full\"}"
+}
