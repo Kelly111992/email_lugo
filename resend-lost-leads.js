@@ -53,17 +53,24 @@ function getSourceEmoji(source) {
 }
 
 // ============================================
-// FORMATEAR MENSAJE DE LEAD
+// FORMATEAR MENSAJE DE LEAD (FORMATO ESTÁNDAR)
 // ============================================
 function formatLeadMessage(lead) {
     const clientName = extractClientName(lead);
-    const clientPhone = extractClientPhone(lead);
+    const clientPhone = extractClientPhone(lead) || 'No detectado';
     const clientEmail = extractClientEmail(lead);
     const source = lead.source || 'otros';
     const emoji = getSourceEmoji(source);
+    const sourceName = getSourceName(source);
     const subject = lead.subject || '(Sin asunto)';
+    const bodyPreview = lead.body_preview || '';
 
-    // Formatear fecha original del lead
+    // Truncar body preview si es muy largo
+    const truncatedBody = bodyPreview.length > 300
+        ? bodyPreview.substring(0, 300) + '...'
+        : bodyPreview;
+
+    // Formatear fecha original del lead (hora México)
     const originalDate = new Date(lead.received_at);
     const dateStr = originalDate.toLocaleDateString('es-MX', {
         timeZone: 'America/Mexico_City',
@@ -78,25 +85,40 @@ function formatLeadMessage(lead) {
         hour12: true
     });
 
-    let message = `${emoji} *NUEVO LEAD - ${source.toUpperCase()}*
-━━━━━━━━━━━━━━━━━━━━━━━
+    // Construir mensaje en formato ESTÁNDAR (igual que whatsapp.js)
+    let message = `📧 *NUEVO LEAD*
 
-👤 *Cliente:* ${clientName}`;
+${emoji} *Origen:* ${sourceName}
+👤 *Nombre Completo:* ${clientName}
+📱 *Teléfono:* ${clientPhone}`;
 
-    if (clientPhone) {
-        message += `\n📱 *Tel:* ${clientPhone}`;
-    }
     if (clientEmail) {
         message += `\n📧 *Email:* ${clientEmail}`;
     }
 
-    message += `\n\n📋 *Asunto:* ${subject}`;
-    message += `\n\n📅 *Recibido:* ${dateStr} ${timeStr}`;
-    message += `\n⚠️ _[Reenviado - Lead del domingo/lunes]_`;
-    message += `\n\n━━━━━━━━━━━━━━━━━━━━━━━
-Link Inmobiliario GDL`;
+    message += `
+
+📝 *Asunto:* ${subject}
+
+💬 *Mensaje:*
+${truncatedBody}
+
+🕐 ${dateStr} ${timeStr}
+⚠️ _[Reenviado - Lead perdido del fin de semana]_`;
 
     return message;
+}
+
+function getSourceName(source) {
+    const names = {
+        'inmuebles24': 'Inmuebles24',
+        'easybroker': 'EasyBroker',
+        'proppit': 'Proppit',
+        'vivanuncios': 'Vivanuncios',
+        'mercadolibre': 'MercadoLibre',
+        'otros': 'Otros'
+    };
+    return names[source] || source;
 }
 
 // ============================================
