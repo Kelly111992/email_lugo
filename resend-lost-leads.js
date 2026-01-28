@@ -9,8 +9,53 @@ const EVOLUTION_CONFIG = {
     apiKey: '429683C4C977415CAAFCCE10F7D57E11'
 };
 
+const EASYBROKER_CONFIG = {
+    baseUrl: 'https://api.easybroker.com/v1',
+    apiKey: '6dt2onwsu5u3ex1qqh49rzck0wsyf4'
+};
+
 const API_URL = 'https://gmail-monitor-dashboard.ckoomq.easypanel.host/api/emails?limit=500';
 const DESTINATION_NUMBERS = ['523318043673', '523312505239'];
+
+// ============================================
+// OBTENER PROPIEDAD DE EASYBROKER API
+// ============================================
+async function getPropertyFromEasyBroker(propertyCode) {
+    return new Promise((resolve) => {
+        const url = new URL(`${EASYBROKER_CONFIG.baseUrl}/properties/${propertyCode}`);
+
+        const options = {
+            hostname: url.hostname,
+            port: 443,
+            path: url.pathname,
+            method: 'GET',
+            headers: {
+                'accept': 'application/json',
+                'X-Authorization': EASYBROKER_CONFIG.apiKey
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    try {
+                        const property = JSON.parse(data);
+                        resolve(property.public_url || null);
+                    } catch (e) {
+                        resolve(null);
+                    }
+                } else {
+                    resolve(null);
+                }
+            });
+        });
+
+        req.on('error', () => resolve(null));
+        req.end();
+    });
+}
 
 // ============================================
 // FUNCIONES AUXILIARES
@@ -55,7 +100,7 @@ function getSourceEmoji(source) {
 // ============================================
 // FORMATEAR MENSAJE DE LEAD (FORMATO ESTÁNDAR)
 // ============================================
-function formatLeadMessage(lead) {
+async function formatLeadMessage(lead) {
     const clientName = extractClientName(lead);
     const clientPhone = extractClientPhone(lead) || 'No detectado';
     const clientEmail = extractClientEmail(lead);
@@ -73,6 +118,12 @@ function formatLeadMessage(lead) {
     let linkInmobiliarioUrl = null;
     if (propertyCode) {
         linkInmobiliarioUrl = `https://www.linkinmobiliario.com.mx/search_text?search%5Btext%5D=${propertyCode}&commit=Ir`;
+        // Consultar EasyBroker API para obtener URL de la propiedad
+        console.log(`   🔍 Buscando propiedad ${propertyCode} en EasyBroker...`);
+        propertyUrl = await getPropertyFromEasyBroker(propertyCode);
+        if (propertyUrl) {
+            console.log(`   ✅ URL encontrada: ${propertyUrl}`);
+        }
     }
 
     // Truncar body preview si es muy largo
@@ -109,6 +160,9 @@ ${emoji} *Origen:* ${sourceName}
     // Agregar código de propiedad y URLs si existen
     if (propertyCode) {
         message += `\n\n🏷️ *Código:* ${propertyCode}`;
+    }
+    if (propertyUrl) {
+        message += `\n🔗 *Link EasyBroker:* ${propertyUrl}`;
     }
     if (linkInmobiliarioUrl) {
         message += `\n🏠 *Link Inmobiliario:* ${linkInmobiliarioUrl}`;
