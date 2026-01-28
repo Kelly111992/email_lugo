@@ -1,6 +1,16 @@
 {
-  "summary": {},
-  "whatsappStatus": null,
-  "timestamp": "2026-01-27T14:32:16.071Z",
-  "error": "API did not return an array: {\"error\":\"SQLITE_FULL: database or disk is full\"}"
+  "summary": {
+    "25/1/2026": {
+      "count": 6,
+      "sources": {
+        "otros": 1,
+        "inmuebles24": 1,
+        "easybroker": 1,
+        "vivanuncios": 3
+      }
+    }
+  },
+  "whatsappStatus": "error",
+  "timestamp": "2026-01-28T03:42:22.422Z",
+  "error": null
 }
