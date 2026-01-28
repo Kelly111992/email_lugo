@@ -65,6 +65,16 @@ function formatLeadMessage(lead) {
     const subject = lead.subject || '(Sin asunto)';
     const bodyPreview = lead.body_preview || '';
 
+    // Extraer código de propiedad (EB-XXXX)
+    const propertyCode = extractPropertyCode(subject);
+
+    // Generar URLs si hay código de propiedad
+    let propertyUrl = null;
+    let linkInmobiliarioUrl = null;
+    if (propertyCode) {
+        linkInmobiliarioUrl = `https://www.linkinmobiliario.com.mx/search_text?search%5Btext%5D=${propertyCode}&commit=Ir`;
+    }
+
     // Truncar body preview si es muy largo
     const truncatedBody = bodyPreview.length > 300
         ? bodyPreview.substring(0, 300) + '...'
@@ -96,6 +106,14 @@ ${emoji} *Origen:* ${sourceName}
         message += `\n📧 *Email:* ${clientEmail}`;
     }
 
+    // Agregar código de propiedad y URLs si existen
+    if (propertyCode) {
+        message += `\n\n🏷️ *Código:* ${propertyCode}`;
+    }
+    if (linkInmobiliarioUrl) {
+        message += `\n🏠 *Link Inmobiliario:* ${linkInmobiliarioUrl}`;
+    }
+
     message += `
 
 📝 *Asunto:* ${subject}
@@ -107,6 +125,12 @@ ${truncatedBody}
 ⚠️ _[Reenviado - Lead perdido del fin de semana]_`;
 
     return message;
+}
+
+// Extraer código de propiedad del asunto (EB-XXXX)
+function extractPropertyCode(subject) {
+    const match = subject.match(/EB-[A-Z]{2}\d+/i);
+    return match ? match[0].toUpperCase() : null;
 }
 
 function getSourceName(source) {
