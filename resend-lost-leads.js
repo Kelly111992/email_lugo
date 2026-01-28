@@ -126,10 +126,16 @@ async function formatLeadMessage(lead) {
         }
     }
 
-    // Truncar body preview si es muy largo
-    const truncatedBody = bodyPreview.length > 300
-        ? bodyPreview.substring(0, 300) + '...'
-        : bodyPreview;
+    // Truncar y sanitizar body preview
+    let cleanBody = bodyPreview
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Caracteres de control
+        .replace(/\r\n/g, '\n')  // Normalizar saltos de línea
+        .replace(/\r/g, '\n')
+        .trim();
+
+    const truncatedBody = cleanBody.length > 300
+        ? cleanBody.substring(0, 300) + '...'
+        : cleanBody;
 
     // Formatear fecha original del lead (hora México)
     const originalDate = new Date(lead.received_at);
@@ -228,6 +234,7 @@ async function sendWhatsApp(message, number) {
                     resolve({ success: true });
                 } else {
                     console.log(`   ❌ Error ${number}: ${res.statusCode}`);
+                    console.log(`   📝 Respuesta: ${data.substring(0, 200)}`);
                     resolve({ success: false, error: data });
                 }
             });
@@ -276,7 +283,7 @@ async function sendWhatsApp(message, number) {
         const clientName = extractClientName(lead);
         console.log(`📤 Reenviando Lead #${lead.id} - ${clientName} (${lead.source})`);
 
-        const message = formatLeadMessage(lead);
+        const message = await formatLeadMessage(lead);
 
         for (const number of DESTINATION_NUMBERS) {
             const result = await sendWhatsApp(message, number);
