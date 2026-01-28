@@ -1,0 +1,195 @@
+const https = require('https');
+
+// ============================================
+// CONFIGURACIÓN
+// ============================================
+const EVOLUTION_CONFIG = {
+    baseUrl: 'https://evolutionapi-evolution-api.ckoomq.easypanel.host',
+    instanceName: 'lugo_email',
+    apiKey: '429683C4C977415CAAFCCE10F7D57E11'
+};
+
+const API_URL = 'https://gmail-monitor-dashboard.ckoomq.easypanel.host/api/emails?limit=500';
+const DESTINATION_NUMBERS = ['523318043673', '523312505239'];
+
+// ============================================
+// FUNCIONES AUXILIARES
+// ============================================
+function extractClientName(lead) {
+    const fromName = lead.from_name || '';
+    // Limpiar nombres tipo "Usuario mediante Inmuebles24"
+    if (fromName.includes('mediante')) {
+        return fromName.split('mediante')[0].trim();
+    }
+    return fromName || 'Cliente';
+}
+
+function extractClientPhone(lead) {
+    const body = lead.body_preview || '';
+    // Buscar patrones de teléfono mexicano
+    const phoneMatch = body.match(/(?:Tel[éeEÉ]?(?:fono)?|Celular|Cel|Móvil|Phone)?[:\s]*(?:\+?52)?[\s.-]?(?:\(?\d{2,3}\)?[\s.-]?)?\d{4}[\s.-]?\d{4}/gi);
+    if (phoneMatch) {
+        return phoneMatch[0].replace(/[^\d+]/g, '');
+    }
+    return null;
+}
+
+function extractClientEmail(lead) {
+    const body = lead.body_preview || '';
+    const emailMatch = body.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    return emailMatch ? emailMatch[0] : null;
+}
+
+function getSourceEmoji(source) {
+    const emojis = {
+        'inmuebles24': '🏠',
+        'easybroker': '🔑',
+        'proppit': '🏢',
+        'vivanuncios': '📢',
+        'mercadolibre': '🛒',
+        'otros': '📧'
+    };
+    return emojis[source] || '📧';
+}
+
+// ============================================
+// FORMATEAR MENSAJE DE LEAD
+// ============================================
+function formatLeadMessage(lead) {
+    const clientName = extractClientName(lead);
+    const clientPhone = extractClientPhone(lead);
+    const clientEmail = extractClientEmail(lead);
+    const source = lead.source || 'otros';
+    const emoji = getSourceEmoji(source);
+    const subject = lead.subject || '(Sin asunto)';
+
+    // Formatear fecha original del lead
+    const originalDate = new Date(lead.received_at);
+    const dateStr = originalDate.toLocaleDateString('es-MX', {
+        timeZone: 'America/Mexico_City',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+    const timeStr = originalDate.toLocaleTimeString('es-MX', {
+        timeZone: 'America/Mexico_City',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
+
+    let message = `${emoji} *NUEVO LEAD - ${source.toUpperCase()}*
+━━━━━━━━━━━━━━━━━━━━━━━
+
+👤 *Cliente:* ${clientName}`;
+
+    if (clientPhone) {
+        message += `\n📱 *Tel:* ${clientPhone}`;
+    }
+    if (clientEmail) {
+        message += `\n📧 *Email:* ${clientEmail}`;
+    }
+
+    message += `\n\n📋 *Asunto:* ${subject}`;
+    message += `\n\n📅 *Recibido:* ${dateStr} ${timeStr}`;
+    message += `\n⚠️ _[Reenviado - Lead del domingo/lunes]_`;
+    message += `\n\n━━━━━━━━━━━━━━━━━━━━━━━
+Link Inmobiliario GDL`;
+
+    return message;
+}
+
+// ============================================
+// ENVIAR WHATSAPP
+// ============================================
+async function sendWhatsApp(message, number) {
+    return new Promise((resolve) => {
+        const url = new URL(`${EVOLUTION_CONFIG.baseUrl}/message/sendText/${EVOLUTION_CONFIG.instanceName}`);
+        const postData = JSON.stringify({ number, text: message });
+
+        const options = {
+            hostname: url.hostname,
+            port: 443,
+            path: url.pathname,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': EVOLUTION_CONFIG.apiKey,
+                'Content-Length': Buffer.byteLength(postData)
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => {
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    console.log(`   ✅ Enviado a ${number}`);
+                    resolve({ success: true });
+                } else {
+                    console.log(`   ❌ Error ${number}: ${res.statusCode}`);
+                    resolve({ success: false, error: data });
+                }
+            });
+        });
+
+        req.on('error', e => {
+            console.log(`   ❌ Error ${number}: ${e.message}`);
+            resolve({ success: false, error: e.message });
+        });
+
+        req.write(postData);
+        req.end();
+    });
+}
+
+// ============================================
+// MAIN: REENVIAR LEADS PERDIDOS
+// ============================================
+(async () => {
+    console.log('🔄 Reenviando leads perdidos del 25-27 de Enero...\n');
+
+    // 1. Obtener leads del servidor
+    const leads = await new Promise((resolve) => {
+        https.get(API_URL, (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => resolve(JSON.parse(data)));
+        });
+    });
+
+    // 2. Filtrar leads del 25-27 de enero
+    const lostLeads = leads.filter(e => {
+        const date = new Date(e.received_at);
+        const day = date.getDate();
+        const month = date.getMonth() + 1;
+        return month === 1 && day >= 25 && day <= 27;
+    });
+
+    console.log(`📋 Encontrados ${lostLeads.length} leads para reenviar:\n`);
+
+    // 3. Reenviar cada lead
+    let sent = 0;
+    let failed = 0;
+
+    for (const lead of lostLeads) {
+        const clientName = extractClientName(lead);
+        console.log(`📤 Reenviando Lead #${lead.id} - ${clientName} (${lead.source})`);
+
+        const message = formatLeadMessage(lead);
+
+        for (const number of DESTINATION_NUMBERS) {
+            const result = await sendWhatsApp(message, number);
+            if (result.success) sent++;
+            else failed++;
+
+            // Pequeña pausa para no saturar la API
+            await new Promise(r => setTimeout(r, 1000));
+        }
+
+        // Pausa entre leads
+        await new Promise(r => setTimeout(r, 2000));
+    }
+
+    console.log(`\n✅ Completado: ${sent} mensajes enviados, ${failed} fallidos`);
+})();
