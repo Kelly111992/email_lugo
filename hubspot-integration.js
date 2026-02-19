@@ -34,16 +34,25 @@ function parseDetailsFromMessage(message) {
     if (!message) return {};
     const details = {};
 
-    const titleMatch = message.match(/(?:Lead\s+\w+\s+-\s+)([^\n]+)/i);
+    // Limpiar marcadores de bold de WhatsApp (*texto*) antes de parsear
+    const clean = message.replace(/\*/g, '');
+
+    const titleMatch = clean.match(/(?:Lead\s+\w+\s+-\s+)([^\n]+)/i);
     if (titleMatch) details.propertyTitle = titleMatch[1].trim();
 
-    const priceMatch = message.match(/Precio:\s*([^\n|]+)/i);
+    const priceMatch = clean.match(/Precio:\s*([^\n|]+)/i);
     if (priceMatch) details.price = priceMatch[1].trim();
 
-    const codeMatch = message.match(/Código:\s*([^\n\s]+)/i);
-    if (codeMatch) details.propertyCode = codeMatch[1].trim();
+    // Buscar código primero por patrón "Código: XXX", luego por patrón EB-XXXXX
+    const codeMatch = clean.match(/C[oó]digo:\s*([A-Z0-9][\w-]+)/i);
+    if (codeMatch) {
+        details.propertyCode = codeMatch[1].trim();
+    } else {
+        const ebMatch = clean.match(/\b(EB-[A-Z0-9]+)\b/i);
+        if (ebMatch) details.propertyCode = ebMatch[1].trim();
+    }
 
-    const urlMatch = message.match(/Link\s+EasyBroker:\s*(https?:\/\/[^\s\n]+)/i);
+    const urlMatch = clean.match(/Link\s+EasyBroker:\s*(https?:\/\/[^\s\n]+)/i);
     if (urlMatch) details.url = urlMatch[1].trim();
 
     if (details.propertyTitle && details.propertyTitle.includes(',')) {

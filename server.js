@@ -106,11 +106,12 @@ app.post('/api/emails', async (req, res) => {
                 phone: whatsapp.extractClientPhone(emailData),
                 message: whatsappResult.formattedMessage || emailData.bodyPreview,
                 source: result.source,
-                // Datos para la Nota HTML
+                subject: subject,
                 propertyTitle: propertyTitle,
                 price: price,
                 location: location,
-                url: propertyUrl || (propertyCode ? `https://www.linkinmobiliario.com.mx/search_text?search%5Btext%5D=${propertyCode}&commit=Ir` : null)
+                url: propertyUrl || (propertyCode ? `https://www.linkinmobiliario.com.mx/search_text?search%5Btext%5D=${propertyCode}&commit=Ir` : null),
+                propertyCode: propertyCode
             };
 
             hubspot.processLead(leadForHubSpot).catch(err => console.error('Error background HubSpot:', err));
@@ -334,10 +335,12 @@ app.post('/api/recover-today', async (req, res) => {
                             phone: whatsapp.extractClientPhone(emailData),
                             message: whatsappResult.formattedMessage || emailData.bodyPreview || emailData.body?.content,
                             source: result.source,
+                            subject: emailData.subject || '',
                             propertyTitle,
                             price,
                             location,
-                            url: propertyUrl || (propertyCode ? `https://www.linkinmobiliario.com.mx/search_text?search%5Btext%5D=${propertyCode}&commit=Ir` : null)
+                            url: propertyUrl || (propertyCode ? `https://www.linkinmobiliario.com.mx/search_text?search%5Btext%5D=${propertyCode}&commit=Ir` : null),
+                            propertyCode: propertyCode
                         };
                         await hubspot.processLead(leadForHubSpot);
                         hubspotSent++;
