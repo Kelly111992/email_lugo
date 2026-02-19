@@ -64,44 +64,52 @@ function linkify(text) {
 
 /**
  * Construye el HTML del engagement con toda la info del lead
+ * Formato tipo ficha técnica — cada campo aparece UNA sola vez
  */
 function buildEngagementHtml(lead, extracted) {
     const finalPropertyTitle = lead.propertyTitle || extracted.propertyTitle || 'Propiedad Interesada';
-    const finalPrice = lead.price || extracted.price || 'Consultar precio';
-    const finalLocation = lead.location || extracted.location || 'No especificada';
-    const finalCode = lead.propertyCode || extracted.propertyCode || null;
-    const finalUrl = lead.url || extracted.url || (finalCode ? `https://www.linkinmobiliario.com.mx/search_text?search%5Btext%5D=${finalCode}&commit=Ir` : null);
-    const finalLinkInmobiliario = lead.linkInmobiliarioUrl || (finalCode ? `https://www.linkinmobiliario.com.mx/search_text?search%5Btext%5D=${finalCode}&commit=Ir` : null);
+    const finalPrice = lead.price || extracted.price || '';
+    const finalLocation = lead.location || extracted.location || '';
+    const finalCode = lead.propertyCode || extracted.propertyCode || '';
+    const finalUrl = lead.url || extracted.url || '';
+    const finalLinkInmobiliario = lead.linkInmobiliarioUrl || (finalCode ? `https://www.linkinmobiliario.com.mx/search_text?search%5Btext%5D=${finalCode}&commit=Ir` : '');
+
+    const rowStyle = 'padding: 8px 12px; border-bottom: 1px solid #eaf0f6; vertical-align: top;';
+    const labelStyle = `${rowStyle} font-weight: bold; color: #33475b; white-space: nowrap; width: 140px;`;
+    const valueStyle = `${rowStyle} color: #555;`;
+
+    const rows = [];
+
+    // Propiedad
+    rows.push(`<tr><td style="${labelStyle}">🏷️ Título</td><td style="${valueStyle}">${finalPropertyTitle}</td></tr>`);
+    if (finalCode) rows.push(`<tr><td style="${labelStyle}">🔖 Código</td><td style="${valueStyle}"><span style="background: #eaf0f6; padding: 2px 6px; border-radius: 3px; font-weight: bold;">${finalCode}</span></td></tr>`);
+    if (finalPrice) rows.push(`<tr><td style="${labelStyle}">💰 Precio</td><td style="${valueStyle}"><span style="color: #00a38d; font-weight: bold;">${finalPrice}</span></td></tr>`);
+    if (finalLocation) rows.push(`<tr><td style="${labelStyle}">📍 Ubicación</td><td style="${valueStyle}">${finalLocation}</td></tr>`);
+
+    // Contacto
+    rows.push(`<tr><td style="${labelStyle}">👤 Nombre</td><td style="${valueStyle}">${lead.firstName || ''} ${lead.lastName || ''}</td></tr>`);
+    rows.push(`<tr><td style="${labelStyle}">📧 Email</td><td style="${valueStyle}">${lead.email || 'N/A'}</td></tr>`);
+    if (lead.phone) rows.push(`<tr><td style="${labelStyle}">📞 Teléfono</td><td style="${valueStyle}">${lead.phone}</td></tr>`);
+    rows.push(`<tr><td style="${labelStyle}">🌐 Fuente</td><td style="${valueStyle}">${lead.source || 'N/A'}</td></tr>`);
+
+    // Links
+    if (finalUrl) rows.push(`<tr><td style="${labelStyle}">🔗 EasyBroker</td><td style="${valueStyle}"><a href="${finalUrl}" target="_blank" style="color: #ff7a59; text-decoration: underline; word-break: break-all;">${finalUrl}</a></td></tr>`);
+    if (finalLinkInmobiliario) rows.push(`<tr><td style="${labelStyle}">🏠 Link Inmob.</td><td style="${valueStyle}"><a href="${finalLinkInmobiliario}" target="_blank" style="color: #2e6ea5; text-decoration: underline; word-break: break-all;">Ver en Link Inmobiliario</a></td></tr>`);
+
+    // Asunto
+    if (lead.subject) rows.push(`<tr><td style="${labelStyle}">📝 Asunto</td><td style="${valueStyle} font-size: 0.9em; color: #7c98b6;">${lead.subject}</td></tr>`);
+
+    // Timestamp
+    rows.push(`<tr><td style="${labelStyle}">🕐 Fecha</td><td style="${valueStyle}">${new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}</td></tr>`);
 
     return `
-        <div style="font-family: sans-serif; line-height: 1.5; color: #33475b; max-width: 600px; border: 1px solid #eaf0f6; border-radius: 8px; padding: 20px;">
-            <h3 style="color: #2e6ea5; border-bottom: 2px solid #eaf0f6; padding-bottom: 10px; margin-top: 0;">🏠 Detalle de la Propiedad</h3>
-            
-            <p style="margin: 10px 0;"><strong>🏷️ Título:</strong> ${finalPropertyTitle}</p>
-            <p style="margin: 10px 0;"><strong>🏷️ Código:</strong> <span style="background: #eaf0f6; padding: 2px 5px; border-radius: 3px; font-weight: bold;">${finalCode || 'N/A'}</span></p>
-            ${finalPrice && finalPrice !== 'No especificado' && finalPrice !== 'Consultar precio' ? `<p style="margin: 5px 0;"><strong>💰 Precio:</strong> <span style="color: #00a38d; font-weight: bold;">${finalPrice}</span></p>` : ''}
-            ${finalLocation && finalLocation !== 'No especificada' ? `<p style="margin: 5px 0;"><strong>📍 Ubicación:</strong> ${finalLocation}</p>` : ''}
-            
-            <div style="margin: 20px 0; padding: 10px; border-left: 4px solid #ff7a59; background: #fff9f7;">
-                <p style="margin: 5px 0;"><strong>🔗 Link EasyBroker:</strong> <br>
-                <a href="${finalUrl || '#'}" target="_blank" style="color: #ff7a59; text-decoration: underline; word-break: break-all;">${finalUrl || 'No disponible'}</a></p>
-                
-                ${finalLinkInmobiliario ? `
-                <p style="margin: 15px 0 5px 0;"><strong>🏠 Link Inmobiliario:</strong> <br>
-                <a href="${finalLinkInmobiliario}" target="_blank" style="color: #2e6ea5; text-decoration: underline; word-break: break-all;">Ver en Link Inmobiliario</a></p>
-                ` : ''}
+        <div style="font-family: sans-serif; line-height: 1.5; color: #33475b; max-width: 600px; border: 1px solid #eaf0f6; border-radius: 8px; overflow: hidden;">
+            <div style="background: #2e6ea5; color: white; padding: 12px 16px;">
+                <strong>🏠 Detalle de la Propiedad</strong>
             </div>
-
-            <hr style="border: 0; border-top: 1px solid #eaf0f6; margin: 20px 0;">
-            
-            <p style="margin: 10px 0;"><strong>📧 Email:</strong> ${lead.email || 'N/A'}</p>
-            <p style="margin: 10px 0;"><strong>📞 Teléfono:</strong> ${lead.phone || 'N/A'}</p>
-            <p style="margin: 10px 0;"><strong>🌐 Fuente:</strong> ${lead.source || 'N/A'}</p>
-            
-            <p style="margin: 10px 0; color: #7c98b6; font-size: 0.9em;"><strong>📝 Asunto Original:</strong><br> ${lead.subject || 'Sin asunto'}</p>
-            
-            <p><strong>💬 Mensaje del Cliente:</strong></p>
-            <div style="background: #f9f9f9; border: 1px solid #eee; margin: 10px 0; padding: 15px; font-style: italic; white-space: pre-wrap; color: #555;">${linkify((lead.message || '').trim())}</div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                ${rows.join('\n                ')}
+            </table>
         </div>
     `;
 }
