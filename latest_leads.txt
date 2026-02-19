@@ -1,0 +1,62 @@
+✅ Recuperados 5 contactos recientes:
+
+--------------------------------------------------
+👤 Nombre: Usuario Prueba Manual
+📧 Email: test_lead_1770698755777@example.com
+📱 Teléfono: 5512345678
+🚦 Estatus: Nuevo
+🌍 Fuente: Inmuebes 24
+📅 Modificado: 2/10/2026, 7:14:53 AM
+📝 Mensaje (Campo 'message'):
+Detalles técnicos de la prueba manual.
+📝 Descripción (Campo 'description'):
+VACIO
+
+--------------------------------------------------
+👤 Nombre: Juan Pérez null
+📧 Email: cliente.prueba@ejemplo.com
+📱 Teléfono: 5512345678
+🚦 Estatus: Nuevo
+🌍 Fuente: Inmuebes 24
+📅 Modificado: 2/10/2026, 6:02:50 AM
+📝 Mensaje (Campo 'message'):
+Mensaje completo de prueba
+📝 Descripción (Campo 'description'):
+VACIO
+
+--------------------------------------------------
+👤 Nombre: Jennifer González 
+📧 Email: jgon093@gmail.com
+📱 Teléfono: +523339737091
+🚦 Estatus: Nuevo
+🌍 Fuente: Inmuebes 24
+📅 Modificado: 2/10/2026, 12:54:29 AM
+📝 Mensaje (Campo 'message'):
+VACIO
+📝 Descripción (Campo 'description'):
+VACIO
+
+--------------------------------------------------
+👤 Nombre: Jose Luis null
+📧 Email: laf.luisparra@gmail.com
+📱 Teléfono: +523311402176
+🚦 Estatus: Nuevo
+🌍 Fuente: Inmuebes 24
+📅 Modificado: 2/10/2026, 12:50:02 AM
+📝 Mensaje (Campo 'message'):
+VACIO
+📝 Descripción (Campo 'description'):
+VACIO
+
+--------------------------------------------------
+👤 Nombre: Vianey Tirado
+📧 Email: vianey.tirado.zendejas@gmail.com
+📱 Teléfono: +523314688720
+🚦 Estatus: Nuevo
+🌍 Fuente: Inmuebes 24
+📅 Modificado: 2/10/2026, 12:48:18 AM
+📝 Mensaje (Campo 'message'):
+VACIO
+📝 Descripción (Campo 'description'):
+VACIO
+

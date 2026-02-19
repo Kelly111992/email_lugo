@@ -1,0 +1,12 @@
+{
+  "remoteLeads": {
+    "count": 6,
+    "lastLead": {
+      "received_at": "2026-01-25 16:40:51",
+      "source": "otros"
+    }
+  },
+  "whatsappStatus": "open",
+  "timestamp": "2026-01-26T05:30:39.189Z",
+  "error": null
+}
