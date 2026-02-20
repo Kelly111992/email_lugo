@@ -2,13 +2,46 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+
+// ============================================
+// BLINDAJE: Require seguro de módulos
+// Si un módulo falla, el servidor NO crashea
+// ============================================
+function safeRequire(modulePath, moduleName) {
+    try {
+        return require(modulePath);
+    } catch (err) {
+        console.error(`⚠️ [BLINDAJE] No se pudo cargar "${moduleName}": ${err.message}`);
+        console.error(`   El servidor continuará sin este módulo.`);
+        return null;
+    }
+}
+
 const database = require('./database');
-const whatsapp = require('./whatsapp');
-const evolutionMonitor = require('./evolution-monitor');
-const leadNotifications = require('./lead-notifications');
-const outlookMonitor = require('./outlook-monitor');
-const hubspot = require('./hubspot-integration');
-const { classifyAsLead } = require('./lead-classifier');
+const whatsapp = safeRequire('./whatsapp', 'whatsapp') || {};
+const evolutionMonitor = safeRequire('./evolution-monitor', 'evolution-monitor');
+const leadNotifications = safeRequire('./lead-notifications', 'lead-notifications');
+const outlookMonitor = safeRequire('./outlook-monitor', 'outlook-monitor');
+const hubspot = safeRequire('./hubspot-integration', 'hubspot-integration');
+let classifyAsLead;
+try {
+    classifyAsLead = require('./lead-classifier').classifyAsLead;
+} catch (err) {
+    console.error('⚠️ [BLINDAJE] lead-classifier no disponible:', err.message);
+    classifyAsLead = () => ({ isLead: true, confidence: 0.5, reason: 'classifier unavailable' });
+}
+
+// ============================================
+// BLINDAJE GLOBAL: Prevenir crashes fatales
+// ============================================
+process.on('uncaughtException', (err) => {
+    console.error('🚨 [CRASH PREVENIDO] uncaughtException:', err.message);
+    console.error(err.stack);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('🚨 [CRASH PREVENIDO] unhandledRejection:', reason);
+});
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -66,17 +99,17 @@ app.post('/api/emails', async (req, res) => {
         console.log(`✅ Correo guardado - ID: ${result.id}, Clasificado como: ${result.source}`);
 
         // Registrar lead para el sistema de alertas de inactividad
-        leadNotifications.registerNewLead();
+        if (leadNotifications) leadNotifications.registerNewLead();
 
         // Enviar notificación a WhatsApp
         console.log('📱 Enviando notificación a WhatsApp...');
         const whatsappResult = await whatsapp.notifyNewEmail(emailData, result.source);
 
         // Clasificar si es un lead real o correo informativo
-        const classification = classifyAsLead(emailData, result.source);
+        const classification = classifyAsLead ? classifyAsLead(emailData, result.source) : { isLead: true, confidence: 0.5, reason: 'default' };
 
         // Solo enviar a HubSpot si es un lead REAL
-        if (classification.isLead) {
+        if (classification.isLead && hubspot) {
             // Extraer info de propiedad para la Nota de HubSpot
             const propertyCode = whatsapp.extractPropertyCode(subject);
             let propertyUrl = null;
@@ -198,6 +231,11 @@ app.post('/api/recover-today', async (req, res) => {
         const sinceISO = todayMexico.toISOString();
 
         console.log(`📅 Buscando emails desde: ${sinceISO} (${sinceHour}:${String(sinceMinute).padStart(2, '0')} AM México)`);
+
+        // Verificar que outlookMonitor esté disponible
+        if (!outlookMonitor) {
+            return res.status(503).json({ success: false, error: 'Módulo outlook-monitor no disponible. Verifica que el archivo existe.' });
+        }
 
         // Verificar credenciales de Outlook
         const status = outlookMonitor.getMonitorStatus();
@@ -582,6 +620,9 @@ app.post('/api/whatsapp/send', async (req, res) => {
 // Verificar estado del monitor de Outlook
 app.get('/api/outlook-status', async (req, res) => {
     try {
+        if (!outlookMonitor) {
+            return res.json({ isMonitoring: false, error: 'Módulo outlook-monitor no disponible', timestamp: new Date().toISOString() });
+        }
         const status = outlookMonitor.getMonitorStatus();
         const testConnection = req.query.test === 'true';
 
@@ -604,6 +645,9 @@ app.get('/api/outlook-status', async (req, res) => {
 // Forzar verificación de correos nuevos
 app.post('/api/outlook-status/check', async (req, res) => {
     try {
+        if (!outlookMonitor) {
+            return res.status(503).json({ success: false, error: 'Módulo outlook-monitor no disponible' });
+        }
         const emails = await outlookMonitor.fetchNewEmails();
         res.json({
             success: true,
@@ -723,119 +767,133 @@ async function startServer() {
             // ============================================
             // INICIAR MONITOREO DE EVOLUTION API
             // ============================================
-            console.log('🔍 Iniciando monitoreo de Evolution API...');
-
-            // Verificación inicial
-            const initialCheck = await evolutionMonitor.runHealthCheck(false);
-            if (initialCheck.healthy) {
-                console.log('✅ Evolution API está funcionando correctamente');
-            } else {
-                console.log('⚠️ Evolution API tiene problemas - Se enviará alerta');
-            }
-
-            // Programar verificaciones automáticas cada 5 minutos
-            let checkCount = 0;
-            setInterval(async () => {
-                checkCount++;
-                // Enviar mensaje de prueba cada 30 min (6 checks)
-                const shouldSendTest = checkCount % 6 === 0;
-
+            // ============================================
+            // INICIAR MONITOREO DE EVOLUTION API (BLINDADO)
+            // ============================================
+            if (evolutionMonitor) {
+                console.log('🔍 Iniciando monitoreo de Evolution API...');
                 try {
-                    await evolutionMonitor.runHealthCheck(shouldSendTest);
-                } catch (error) {
-                    console.error('❌ Error en verificación automática:', error.message);
-                }
-            }, MONITOR_INTERVAL_MS);
+                    const initialCheck = await evolutionMonitor.runHealthCheck(false);
+                    if (initialCheck.healthy) {
+                        console.log('✅ Evolution API está funcionando correctamente');
+                    } else {
+                        console.log('⚠️ Evolution API tiene problemas - Se enviará alerta');
+                    }
 
-            console.log(`⏰ Verificación automática cada ${MONITOR_INTERVAL_MS / 1000 / 60} minutos`);
+                    let checkCount = 0;
+                    setInterval(async () => {
+                        checkCount++;
+                        const shouldSendTest = checkCount % 6 === 0;
+                        try {
+                            await evolutionMonitor.runHealthCheck(shouldSendTest);
+                        } catch (error) {
+                            console.error('❌ Error en verificación automática:', error.message);
+                        }
+                    }, MONITOR_INTERVAL_MS);
+
+                    console.log(`⏰ Verificación automática cada ${MONITOR_INTERVAL_MS / 1000 / 60} minutos`);
+                } catch (err) {
+                    console.error('⚠️ [BLINDAJE] Error iniciando evolution-monitor:', err.message);
+                }
+            } else {
+                console.log('⚠️ [BLINDAJE] evolution-monitor no disponible, continuando sin él');
+            }
 
             // ============================================
             // INICIAR NOTIFICACIONES DE LEADS
             // ============================================
-            leadNotifications.startScheduler();
-            console.log('📊 Sistema de resumen diario y alertas de inactividad activado');
+            if (leadNotifications) {
+                leadNotifications.startScheduler();
+                console.log('📊 Sistema de resumen diario y alertas de inactividad activado');
+            } else {
+                console.log('⚠️ [BLINDAJE] lead-notifications no disponible');
+            }
 
             // ============================================
             // INICIAR MONITOREO DE OUTLOOK (REEMPLAZA N8N)
             // ============================================
             console.log('📧 Iniciando monitoreo de Outlook via Microsoft Graph...');
-            try {
-                await outlookMonitor.startMonitoring(async (emailData) => {
-                    // Procesar correo igual que antes
-                    const subject = emailData.subject || '';
-                    const fromAddress = (emailData.from?.emailAddress?.address || '').toLowerCase();
+            if (!outlookMonitor) {
+                console.log('⚠️ [BLINDAJE] outlook-monitor no disponible. El servidor funciona sin monitoreo de Outlook.');
+            } else {
+                try {
+                    await outlookMonitor.startMonitoring(async (emailData) => {
+                        // Procesar correo igual que antes
+                        const subject = emailData.subject || '';
+                        const fromAddress = (emailData.from?.emailAddress?.address || '').toLowerCase();
 
-                    // Protección anti-loop
-                    if (subject.includes('🏠 Nuevo Lead') ||
-                        subject.includes('Delivery Status Notification') ||
-                        fromAddress.includes('mailer-daemon') ||
-                        fromAddress.includes('@linkinmobiliario.com.mx')) {
-                        console.log(`🛑 Ignorando correo del sistema: ${subject}`);
-                        return;
-                    }
-
-                    const result = await database.insertEmail(emailData);
-
-                    if (result.duplicate) {
-                        console.log('🛑 Correo duplicado, ignorando.');
-                        return;
-                    }
-
-                    console.log(`✅ Nuevo lead desde Outlook: ${subject}`);
-                    leadNotifications.registerNewLead();
-                    const whatsappResult = await whatsapp.notifyNewEmail(emailData, result.source);
-
-                    // Clasificar si es lead real
-                    const classification = classifyAsLead(emailData, result.source);
-
-                    // Solo enviar a HubSpot si es lead REAL
-                    if (classification.isLead) {
-                        // Extraer info de propiedad para la Nota de HubSpot
-                        const propertyCode = whatsapp.extractPropertyCode(emailData.subject || '');
-                        let propertyUrl = null;
-                        let propertyTitle = 'Propiedad interesada';
-                        let price = 'No especificado';
-                        let location = 'No especificada';
-
-                        if (propertyCode) {
-                            try {
-                                const property = await whatsapp.getPropertyFromEasyBroker(propertyCode);
-                                if (property) {
-                                    propertyUrl = property.public_url || null;
-                                    propertyTitle = property.title || propertyTitle;
-                                    price = property.price ? `${property.price.amount} ${property.price.currency}` : price;
-                                    location = property.location ? property.location.name : location;
-                                }
-                            } catch (e) {
-                                console.error('⚠️ Error obteniendo detalles extra para HubSpot (Outlook):', e.message);
-                            }
+                        // Protección anti-loop
+                        if (subject.includes('🏠 Nuevo Lead') ||
+                            subject.includes('Delivery Status Notification') ||
+                            fromAddress.includes('mailer-daemon') ||
+                            fromAddress.includes('@linkinmobiliario.com.mx')) {
+                            console.log(`🛑 Ignorando correo del sistema: ${subject}`);
+                            return;
                         }
 
-                        const leadForHubSpot = {
-                            email: whatsapp.extractClientEmail(emailData) || fromAddress,
-                            firstName: whatsapp.extractClientName(emailData),
-                            lastName: '',
-                            phone: whatsapp.extractClientPhone(emailData),
-                            message: whatsappResult.formattedMessage || emailData.bodyPreview || emailData.body?.content,
-                            source: result.source,
-                            subject: emailData.subject,
-                            propertyTitle,
-                            price,
-                            location,
-                            url: propertyUrl || (propertyCode ? `https://www.linkinmobiliario.com.mx/search_text?search%5Btext%5D=${propertyCode}&commit=Ir` : null),
-                            propertyCode
-                        };
-                        hubspot.processLead(leadForHubSpot).catch(err => console.error('Error background HubSpot (Outlook):', err));
-                        console.log('📤 Lead enviado a HubSpot (Outlook) con detalles completos');
-                    } else {
-                        console.log(`📰 Correo informativo (Outlook) - NO se envía a HubSpot`);
-                    }
-                });
-                console.log('✅ Monitoreo de Outlook activo');
-            } catch (error) {
-                console.error('❌ Error iniciando monitor de Outlook:', error.message);
-                console.log('⚠️  Verifica los permisos de Microsoft Graph API');
-            }
+                        const result = await database.insertEmail(emailData);
+
+                        if (result.duplicate) {
+                            console.log('🛑 Correo duplicado, ignorando.');
+                            return;
+                        }
+
+                        console.log(`✅ Nuevo lead desde Outlook: ${subject}`);
+                        leadNotifications.registerNewLead();
+                        const whatsappResult = await whatsapp.notifyNewEmail(emailData, result.source);
+
+                        // Clasificar si es lead real
+                        const classification = classifyAsLead(emailData, result.source);
+
+                        // Solo enviar a HubSpot si es lead REAL
+                        if (classification.isLead) {
+                            // Extraer info de propiedad para la Nota de HubSpot
+                            const propertyCode = whatsapp.extractPropertyCode(emailData.subject || '');
+                            let propertyUrl = null;
+                            let propertyTitle = 'Propiedad interesada';
+                            let price = 'No especificado';
+                            let location = 'No especificada';
+
+                            if (propertyCode) {
+                                try {
+                                    const property = await whatsapp.getPropertyFromEasyBroker(propertyCode);
+                                    if (property) {
+                                        propertyUrl = property.public_url || null;
+                                        propertyTitle = property.title || propertyTitle;
+                                        price = property.price ? `${property.price.amount} ${property.price.currency}` : price;
+                                        location = property.location ? property.location.name : location;
+                                    }
+                                } catch (e) {
+                                    console.error('⚠️ Error obteniendo detalles extra para HubSpot (Outlook):', e.message);
+                                }
+                            }
+
+                            const leadForHubSpot = {
+                                email: whatsapp.extractClientEmail(emailData) || fromAddress,
+                                firstName: whatsapp.extractClientName(emailData),
+                                lastName: '',
+                                phone: whatsapp.extractClientPhone(emailData),
+                                message: whatsappResult.formattedMessage || emailData.bodyPreview || emailData.body?.content,
+                                source: result.source,
+                                subject: emailData.subject,
+                                propertyTitle,
+                                price,
+                                location,
+                                url: propertyUrl || (propertyCode ? `https://www.linkinmobiliario.com.mx/search_text?search%5Btext%5D=${propertyCode}&commit=Ir` : null),
+                                propertyCode
+                            };
+                            hubspot.processLead(leadForHubSpot).catch(err => console.error('Error background HubSpot (Outlook):', err));
+                            console.log('📤 Lead enviado a HubSpot (Outlook) con detalles completos');
+                        } else {
+                            console.log(`📰 Correo informativo (Outlook) - NO se envía a HubSpot`);
+                        }
+                    });
+                    console.log('✅ Monitoreo de Outlook activo');
+                } catch (error) {
+                    console.error('❌ Error iniciando monitor de Outlook:', error.message);
+                    console.log('⚠️  El servidor CONTINÚA funcionando sin Outlook. Verifica permisos de Microsoft Graph API.');
+                }
+            } // cierre del if (outlookMonitor)
         });
     } catch (error) {
         console.error('❌ Error al iniciar servidor:', error);
