@@ -17,6 +17,10 @@ const GESTORES = NOTIFICATION_CONFIG.whatsapp_numbers;
  * Lógica de Mapeo Inteligente para corregir leads de Meta/Excel
  */
 function smartMapping(data) {
+    // 1. Recolectar TODOS los valores de texto para búsqueda global
+    const allValues = Object.values(data).map(v => (v || '').toString().trim());
+    const allText = allValues.join(' ');
+
     const mapped = {
         Nombre: data.Nombre || data.Name || data.name || 'No disponible',
         Numero: data.Numero || data.Telefono || data.Phone || data.phone || data.tel || data.cel || 'No especificado',
@@ -24,52 +28,67 @@ function smartMapping(data) {
         Campaña: data.Campaña || data.Campaign || data.campaign || 'N/A',
         Plataforma: data.Plataforma || data.Source || data.source || 'N/A',
         Comentarios: data.Comentarios || data.Mensaje || data.Observaciones || data.message || 'Sin comentarios',
-        Email: data.Email || data.EmailAddress || data.correo || data.Correo || null
+        Email: data.Email || data.EmailAddress || data.correo || data.Correo || null,
+        Codigo: null,
+        LinkInteres: null
     };
 
-    // 1. Extraer Email de cualquier campo si no lo tenemos
+    // 2. Búsqueda Global de Email (si no está mapeado)
     if (!mapped.Email) {
         const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
-        for (const key in data) {
-            const val = data[key];
-            if (typeof val === 'string' && emailRegex.test(val)) {
-                mapped.Email = val.match(emailRegex)[0];
-                break;
+        const foundEmail = allText.match(emailRegex);
+        if (foundEmail) mapped.Email = foundEmail[0];
+    }
+
+    // 3. Búsqueda Global de Teléfono (especialmente si Numero tiene letras o el email)
+    const phoneRegex = /(?:52|55|\+52)?\d{10,12}/;
+    if (mapped.Numero === 'No especificado' || /[a-zA-Z]/.test(mapped.Numero) || (mapped.Email && mapped.Numero.includes(mapped.Email))) {
+        // Buscar en todos los campos un valor que parezca teléfono
+        for (const val of allValues) {
+            if (val.length >= 10 && /^\d+$/.test(val.replace(/[+\s-]/g, ''))) {
+                const clean = val.replace(/[+\s-]/g, '');
+                if (clean.length >= 10) {
+                    mapped.Numero = clean;
+                    break;
+                }
             }
         }
     }
 
-    // 2. Limpiar Propiedad y Campaña si contienen el email (error común de n8n)
+    // 4. Búsqueda Global de Código de Propiedad (Pattern EB-XXX o CDV_XXX)
+    const codePattern = /(?:EB-|CDV_)[A-Z0-9_]+/i;
+    const foundCode = allText.match(codePattern);
+    if (foundCode) mapped.Codigo = foundCode[0].toUpperCase();
+
+    // 5. Búsqueda Global de Links (Instagram, EasyBroker, etc)
+    const urlPattern = /https?:\/\/[^\s,]+/;
+    const foundUrl = allText.match(urlPattern);
+    if (foundUrl) mapped.LinkInteres = foundUrl[0];
+
+    // 6. Limpieza y Re-asignación de Campos Colapsados
     if (mapped.Email) {
         if (mapped.Propiedad && mapped.Propiedad.includes(mapped.Email)) mapped.Propiedad = 'No especificada';
         if (mapped.Campaña && mapped.Campaña.includes(mapped.Email)) mapped.Campaña = 'N/A';
-        // Si el número es el email, ponerlo como no especificado
-        if (mapped.Numero && mapped.Numero.includes(mapped.Email)) mapped.Numero = 'No especificado';
     }
 
-    // 3. Detectar si el nombre es en realidad la plataforma ("Meta")
+    // 7. Lógica de Nombres / Plataforma Corregida
     const platforms = ['meta', 'facebook', 'instagram', 'google'];
     const nameLower = mapped.Nombre.toString().toLowerCase().trim();
 
     if (platforms.includes(nameLower)) {
-        // Si el "Número" tiene letras, es probablemente el NOMBRE REAL
-        if (/[a-zA-Z]/.test(mapped.Numero) && !mapped.Numero.includes('@')) {
-            const tempName = mapped.Nombre;
-            mapped.Nombre = mapped.Numero;
-            mapped.Plataforma = tempName.charAt(0).toUpperCase() + tempName.slice(1);
-            mapped.Numero = 'No especificado';
-        }
-    }
-
-    // 4. Intentar rescatar el número de otros campos si no lo tenemos bien
-    if (mapped.Numero === 'No especificado' || /[a-zA-Z]/.test(mapped.Numero)) {
-        const fieldsToSearch = [data.Phone, data.Telefono, data.WhatsApp, data.tel, data.cel, data.numero];
-        for (const val of fieldsToSearch) {
-            if (val && /^[0-9+\s-]{8,}$/.test(val)) {
-                mapped.Numero = val.toString().trim();
+        // Buscar un nombre real en el objeto (valor que tenga espacios y sea texto)
+        for (const val of allValues) {
+            if (val.length > 3 && val.includes(' ') && !val.includes('@') && !platforms.includes(val.toLowerCase()) && !/^\d+$/.test(val.replace(/\s/g, ''))) {
+                mapped.Nombre = val;
                 break;
             }
         }
+        mapped.Plataforma = nameLower.charAt(0).toUpperCase() + nameLower.slice(1);
+    }
+
+    // 8. Enriquecer Propiedad con el Código si se encontró
+    if (mapped.Codigo && (mapped.Propiedad === 'No especificada' || mapped.Propiedad === 'N/A')) {
+        mapped.Propiedad = `Código ${mapped.Codigo}`;
     }
 
     return mapped;
@@ -121,6 +140,7 @@ app.post('/webhook/excel-lead', async (req, res) => {
 🏠 *Propiedad:* ${data.Propiedad}
 🎯 *Campaña:* ${data.Campaña}
 🏗️ *Plataforma:* ${data.Plataforma}
+🔗 *Link:* ${data.LinkInteres || 'N/A'}
 💬 *Comentarios:* ${data.Comentarios}
 ━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️ _Origen: Sincronización Directa Google Sheets_`;
