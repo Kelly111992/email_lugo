@@ -18,21 +18,42 @@ const GESTORES = NOTIFICATION_CONFIG.whatsapp_numbers;
  */
 function smartMapping(data) {
     const mapped = {
-        Nombre: data.Nombre || 'No disponible',
-        Numero: data.Numero || 'No especificado',
-        Propiedad: data.Propiedad || 'No especificada',
-        Campaña: data.Campaña || 'N/A',
-        Plataforma: data.Plataforma || 'N/A',
-        Comentarios: data.Comentarios || data.Mensaje || data.Observaciones || 'Sin comentarios'
+        Nombre: data.Nombre || data.Name || data.name || 'No disponible',
+        Numero: data.Numero || data.Telefono || data.Phone || data.phone || data.tel || data.cel || 'No especificado',
+        Propiedad: data.Propiedad || data.Property || data.propiedad || 'No especificada',
+        Campaña: data.Campaña || data.Campaign || data.campaign || 'N/A',
+        Plataforma: data.Plataforma || data.Source || data.source || 'N/A',
+        Comentarios: data.Comentarios || data.Mensaje || data.Observaciones || data.message || 'Sin comentarios',
+        Email: data.Email || data.EmailAddress || data.correo || data.Correo || null
     };
 
-    // Detectar si el nombre es en realidad la plataforma ("Meta")
+    // 1. Extraer Email de cualquier campo si no lo tenemos
+    if (!mapped.Email) {
+        const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+        for (const key in data) {
+            const val = data[key];
+            if (typeof val === 'string' && emailRegex.test(val)) {
+                mapped.Email = val.match(emailRegex)[0];
+                break;
+            }
+        }
+    }
+
+    // 2. Limpiar Propiedad y Campaña si contienen el email (error común de n8n)
+    if (mapped.Email) {
+        if (mapped.Propiedad && mapped.Propiedad.includes(mapped.Email)) mapped.Propiedad = 'No especificada';
+        if (mapped.Campaña && mapped.Campaña.includes(mapped.Email)) mapped.Campaña = 'N/A';
+        // Si el número es el email, ponerlo como no especificado
+        if (mapped.Numero && mapped.Numero.includes(mapped.Email)) mapped.Numero = 'No especificado';
+    }
+
+    // 3. Detectar si el nombre es en realidad la plataforma ("Meta")
     const platforms = ['meta', 'facebook', 'instagram', 'google'];
     const nameLower = mapped.Nombre.toString().toLowerCase().trim();
 
     if (platforms.includes(nameLower)) {
-        // Si el "Número" contiene letras, es probablemente el NOMBRE REAL
-        if (/[a-zA-Z]/.test(mapped.Numero)) {
+        // Si el "Número" tiene letras, es probablemente el NOMBRE REAL
+        if (/[a-zA-Z]/.test(mapped.Numero) && !mapped.Numero.includes('@')) {
             const tempName = mapped.Nombre;
             mapped.Nombre = mapped.Numero;
             mapped.Plataforma = tempName.charAt(0).toUpperCase() + tempName.slice(1);
@@ -40,12 +61,14 @@ function smartMapping(data) {
         }
     }
 
-    // Verificar si el teléfono viene en otro campo por error
-    const fieldsToSearch = [data.Phone, data.Telefono, data.WhatsApp, data.tel, data.cel];
-    for (const val of fieldsToSearch) {
-        if (val && /^[0-9+\s-]{8,}$/.test(val)) {
-            mapped.Numero = val;
-            break;
+    // 4. Intentar rescatar el número de otros campos si no lo tenemos bien
+    if (mapped.Numero === 'No especificado' || /[a-zA-Z]/.test(mapped.Numero)) {
+        const fieldsToSearch = [data.Phone, data.Telefono, data.WhatsApp, data.tel, data.cel, data.numero];
+        for (const val of fieldsToSearch) {
+            if (val && /^[0-9+\s-]{8,}$/.test(val)) {
+                mapped.Numero = val.toString().trim();
+                break;
+            }
         }
     }
 
@@ -94,6 +117,7 @@ app.post('/webhook/excel-lead', async (req, res) => {
 ━━━━━━━━━━━━━━━━━━━━━━━
 👤 *Nombre:* ${data.Nombre}
 📱 *Teléfono:* ${data.Numero}
+📧 *Email:* ${data.Email || 'No disponible'}
 🏠 *Propiedad:* ${data.Propiedad}
 🎯 *Campaña:* ${data.Campaña}
 🏗️ *Plataforma:* ${data.Plataforma}
