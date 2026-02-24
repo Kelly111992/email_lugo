@@ -39,50 +39,37 @@ function smartMapping(data) {
         if (foundEmail) mapped.Email = foundEmail[0];
     }
 
-    // 3. Búsqueda Global de Teléfono
+    // 4. IDENTIFICAR TELÉFONO REAL (Limpieza exhaustiva)
     if (mapped.Numero === 'No especificado' || /[a-zA-Z]/.test(mapped.Numero) || (mapped.Email && mapped.Numero.includes(mapped.Email))) {
         for (const val of allValues) {
-            if (val.length >= 10 && /^\d+$/.test(val.replace(/[+\s-]/g, ''))) {
-                const clean = val.replace(/[+\s-]/g, '');
-                if (clean.length >= 10) {
-                    mapped.Numero = clean;
-                    break;
-                }
+            const clean = val.replace(/[^\d]/g, '');
+            if (clean.length >= 10 && clean.length <= 13) {
+                mapped.Numero = clean;
+                break;
             }
         }
     }
 
-    // 4. Búsqueda Global de Código de Propiedad
+    // 5. Búsqueda de Código y Link
     const codePattern = /(?:EB-|CDV_)[A-Z0-9_]+/i;
     const foundCode = allText.match(codePattern);
     if (foundCode) mapped.Codigo = foundCode[0].toUpperCase();
 
-    // 5. Búsqueda Global de Links
     const urlPattern = /https?:\/\/[^\s,]+/;
     const foundUrl = allText.match(urlPattern);
     if (foundUrl) mapped.LinkInteres = foundUrl[0];
 
-    // 6. Limpieza de Campos
+    // 6. Limpieza final de campos colapsados
     if (mapped.Email) {
         if (mapped.Propiedad && mapped.Propiedad.includes(mapped.Email)) mapped.Propiedad = 'No especificada';
         if (mapped.Campaña && mapped.Campaña.includes(mapped.Email)) mapped.Campaña = 'N/A';
     }
 
-    // 7. Lógica de Nombres / Plataforma Corregida
-    const platforms = ['meta', 'facebook', 'instagram', 'google'];
-    const nameLower = mapped.Nombre.toString().toLowerCase().trim();
-
+    // Enriquecer plataforma si el nombre original era una plataforma
     if (platforms.includes(nameLower)) {
-        for (const val of allValues) {
-            if (val.length > 3 && val.includes(' ') && !val.includes('@') && !platforms.includes(val.toLowerCase()) && !/^\d+$/.test(val.replace(/\s/g, ''))) {
-                mapped.Nombre = val;
-                break;
-            }
-        }
         mapped.Plataforma = nameLower.charAt(0).toUpperCase() + nameLower.slice(1);
     }
 
-    // 8. Enriquecer Propiedad
     if (mapped.Codigo && (mapped.Propiedad === 'No especificada' || mapped.Propiedad === 'N/A')) {
         mapped.Propiedad = `Código ${mapped.Codigo}`;
     }
@@ -138,5 +125,5 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-app.listen(3000, '0.0.0.0', () => console.log('✅ Receptor Excel listo en puerto 3000'));
+app.listen(3000, '0.0.0.0', () => console.log('✅ RECEPTOR LUX v3.2 LISTO en puerto 3000'));
 

@@ -156,8 +156,7 @@ app.post('/webhook/excel-lead', async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3005;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ LUX Excel encendido y listo en puerto ${PORT}`);
+    console.log(`✅ RECEPTOR LUX v3.2 LISTO en puerto ${PORT}`);
 });
 
